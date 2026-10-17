@@ -1,0 +1,224 @@
+---
+export const prerender = true;
+import '../../styles/global.css';
+import { SLOTS } from '../../lib/slots';
+import { CATEGORIES } from '../../lib/site';
+---
+<!doctype html>
+<html lang="pl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Panel – Częstokocham</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  </head>
+  <body class="adm">
+    <header class="adm-top">
+      <a href="/" class="adm-logo"><img src="/logo.svg" width="110" height="68" alt="Częstokocham" /></a>
+      <nav class="adm-tabs" hidden>
+        <button data-tab="articles" aria-current="true">Artykuły</button>
+        <button data-tab="ads">Banery</button>
+        <button data-tab="import">Import z czestochowa.pl</button>
+        <button data-tab="settings">Ustawienia</button>
+      </nav>
+      <div class="adm-user"><span id="who"></span> <button id="logout" class="btn" hidden>Wyloguj</button></div>
+    </header>
+
+    <main class="adm-main">
+      <p id="pub" class="pub" role="status"></p>
+      <!-- logowanie -->
+      <section id="v-login" class="card narrow">
+        <h1 class="head">Panel redakcji</h1>
+        <p>Zaloguj się kontem Google, które ma dostęp do panelu.</p>
+        <button id="login" class="btn red">Zaloguj przez Google</button>
+        <p id="login-err" class="err" hidden></p>
+      </section>
+
+      <!-- artykuły -->
+      <section id="v-articles" hidden>
+        <div class="bar">
+          <h1 class="head">Artykuły</h1>
+          <div class="bar-r">
+            <input id="a-q" type="search" placeholder="Szukaj po tytule" />
+            <select id="a-cat"><option value="">Wszystkie działy</option>{Object.entries(CATEGORIES).map(([k, c]) => <option value={k}>{c.name}</option>)}</select>
+            <button id="a-new" class="btn red">Nowy artykuł</button>
+          </div>
+        </div>
+        <table class="tbl"><thead><tr><th>Tytuł</th><th>Dział</th><th>Status</th><th>Data</th><th>Źródło</th></tr></thead><tbody id="a-list"></tbody></table>
+        <button id="a-more" class="btn" hidden>Pokaż starsze</button>
+      </section>
+
+      <!-- edytor artykułu -->
+      <section id="v-editor" hidden>
+        <div class="bar">
+          <h1 class="head" id="e-h">Nowy artykuł</h1>
+          <div class="bar-r"><a id="e-view" class="btn" target="_blank" hidden>Zobacz na stronie</a><button id="e-back" class="btn">Wróć do listy</button></div>
+        </div>
+        <form id="e-form" class="grid2">
+          <div class="col-main">
+            <label>Tytuł<input name="title" required maxlength="160" /></label>
+            <label>Adres (slug)<input name="slug" required pattern="[a-z0-9-]+" /></label>
+            <label>Lead (wstęp, pogrubiony pod tytułem)<textarea name="lead" rows="3" maxlength="400"></textarea></label>
+            <div class="lbl">Treść</div>
+            <div class="rte-bar" role="toolbar" aria-label="Formatowanie">
+              <button type="button" data-cmd="bold"><b>B</b></button>
+              <button type="button" data-cmd="italic"><i>I</i></button>
+              <button type="button" data-cmd="h2">Śródtytuł</button>
+              <button type="button" data-cmd="p">Akapit</button>
+              <button type="button" data-cmd="ul">Lista</button>
+              <button type="button" data-cmd="ol">Lista num.</button>
+              <button type="button" data-cmd="quote">Cytat</button>
+              <button type="button" data-cmd="link">Link</button>
+              <button type="button" data-cmd="clear">Wyczyść format</button>
+            </div>
+            <div id="rte" class="rte" contenteditable="true"></div>
+            <div class="lbl">Galeria</div>
+            <div id="gal" class="thumbs"></div>
+            <label class="up">Dodaj zdjęcia do galerii<input id="gal-in" type="file" accept="image/*" multiple /></label>
+          </div>
+          <div class="col-side">
+            <label>Dział<select name="category">{Object.entries(CATEGORIES).map(([k, c]) => <option value={k}>{c.name}</option>)}</select></label>
+            <label>Status<select name="status"><option value="published">Opublikowany</option><option value="draft">Szkic</option></select></label>
+            <label>Data publikacji<input name="publishedAt" type="datetime-local" required /></label>
+            <label class="chk"><input name="featured" type="checkbox" /> Wyróżniony (główny na stronie)</label>
+            <label>Autor<input name="author" value="Redakcja" /></label>
+            <label>Autor zdjęć<input name="photoCredit" /></label>
+            <label>Źródło – nazwa<input name="sourceName" placeholder="np. czestochowa.pl" /></label>
+            <label>Źródło – adres<input name="sourceUrl" type="url" /></label>
+            <div class="lbl">Zdjęcie główne</div>
+            <div id="cover" class="cover"></div>
+            <label class="up">Wybierz zdjęcie<input id="cover-in" type="file" accept="image/*" /></label>
+            <label>Opis zdjęcia (alt)<input name="coverAlt" /></label>
+            <p class="hint">Zdjęcia są automatycznie zmniejszane i zapisywane w WebP (główne 640 i 1280 px, galeria 480 i 1200 px).</p>
+            <div class="actions">
+              <button type="submit" class="btn red">Zapisz</button>
+              <button type="button" id="e-del" class="btn danger" hidden>Usuń artykuł</button>
+            </div>
+            <p id="e-msg" class="msg" role="status"></p>
+          </div>
+        </form>
+      </section>
+
+      <!-- banery -->
+      <section id="v-ads" hidden>
+        <div class="bar"><h1 class="head">Banery</h1><div class="bar-r"><button id="ad-new" class="btn red">Nowy baner</button></div></div>
+        <p class="hint">Gdy w miejscu nie ma aktywnego banera, wyświetla się reklama Google (jeśli włączona) albo zaproszenie „Tu może być Twoja reklama”. Kilka banerów w jednym miejscu rotuje losowo według wagi.</p>
+        <table class="tbl"><thead><tr><th>Klient</th><th>Miejsce</th><th>Okres</th><th>Aktywny</th></tr></thead><tbody id="ad-list"></tbody></table>
+
+        <form id="ad-form" class="card" hidden>
+          <h2 class="ad-h" id="ad-h">Nowy baner</h2>
+          <div class="grid3">
+            <label>Miejsce<select name="slot">{Object.entries(SLOTS).map(([k, s]) => <option value={k}>{s.name} – {s.desktop.join('×')}{s.mobile ? ` / tel. ${s.mobile.join('×')}` : ''}</option>)}</select></label>
+            <label>Klient<input name="client" required /></label>
+            <label>Adres docelowy<input name="link" type="url" required placeholder="https://" /></label>
+            <label>Tekst alternatywny<input name="alt" /></label>
+            <label>Od<input name="start" type="date" /></label>
+            <label>Do<input name="end" type="date" /></label>
+            <label>Waga rotacji<input name="weight" type="number" min="1" max="10" value="1" /></label>
+            <label class="chk"><input name="active" type="checkbox" checked /> Aktywny</label>
+          </div>
+          <div class="grid2 ad-imgs">
+            <div><div class="lbl" id="dim-d">Grafika – komputer</div><div id="ad-d" class="adprev"></div><label class="up">Wybierz plik<input id="ad-d-in" type="file" accept="image/*" /></label></div>
+            <div id="ad-m-wrap"><div class="lbl" id="dim-m">Grafika – telefon</div><div id="ad-m" class="adprev"></div><label class="up">Wybierz plik<input id="ad-m-in" type="file" accept="image/*" /></label></div>
+          </div>
+          <p class="hint">Grafika musi mieć dokładnie podany wymiar albo dwukrotnie większy. JPG/PNG zamieniamy na WebP, GIF zostaje bez zmian (animacja).</p>
+          <div class="actions"><button class="btn red" type="submit">Zapisz baner</button><button class="btn" type="button" id="ad-cancel">Anuluj</button><button class="btn danger" type="button" id="ad-del" hidden>Usuń</button></div>
+          <p id="ad-msg" class="msg" role="status"></p>
+        </form>
+      </section>
+
+      <!-- import -->
+      <section id="v-import" hidden>
+        <div class="bar"><h1 class="head">Import z czestochowa.pl</h1><div class="bar-r"><button id="imp-run" class="btn red">Importuj teraz</button></div></div>
+        <p>Codziennie po 15:00 automat pobiera nowe aktualności z <a class="link" href="https://www.czestochowa.pl/aktualnosci" target="_blank" rel="noopener">czestochowa.pl/aktualnosci</a> razem ze zdjęciami (WebP) i publikuje je w dziale Miasto (lub Sport) z podpisem „Źródło: czestochowa.pl”. Zaimportowane artykuły można dowolnie edytować – kolejny import ich nie nadpisze.</p>
+        <p id="imp-msg" class="msg" role="status"></p>
+        <table class="tbl"><thead><tr><th>Kiedy</th><th>Uruchomienie</th><th>Sprawdzono</th><th>Nowe</th><th>Błędy</th></tr></thead><tbody id="imp-list"></tbody></table>
+      </section>
+
+      <!-- ustawienia -->
+      <section id="v-settings" hidden>
+        <div class="bar"><h1 class="head">Ustawienia</h1></div>
+        <form id="s-form" class="card">
+          <h2 class="ad-h">Google AdSense</h2>
+          <label class="chk"><input name="adsenseEnabled" type="checkbox" /> Wyświetlaj reklamy Google w wolnych miejscach</label>
+          <label>Identyfikator wydawcy<input name="adsenseClient" placeholder="ca-pub-0000000000000000" pattern="ca-pub-[0-9]+" /></label>
+          <div class="grid3">
+            {Object.entries(SLOTS).map(([k, s]) => <label>Jednostka: {s.name}<input name={`slot_${k}`} placeholder="np. 1234567890" /></label>)}
+          </div>
+          <label>Dodatkowe linie ads.txt<textarea name="adsTxt" rows="3"></textarea></label>
+          <h2 class="ad-h">Statystyki</h2>
+          <label>Google Analytics 4 – identyfikator<input name="analyticsId" placeholder="G-XXXXXXX" /></label>
+          <h2 class="ad-h">Dostęp do panelu</h2>
+          <label>Adresy e-mail (Google), po jednym w linii<textarea name="admins" rows="4"></textarea></label>
+          <div class="actions"><button class="btn red" type="submit">Zapisz ustawienia</button></div>
+          
+          <p id="s-msg" class="msg" role="status"></p>
+        </form>
+      </section>
+    </main>
+    <script>
+      import '../../admin/admin.ts';
+    </script>
+  </body>
+</html>
+
+<style is:global>
+  .adm { background: var(--paper); font-size: 16px; }
+  .adm-top { display: flex; align-items: center; gap: 24px; padding: 8px 20px; background: #fff; flex-wrap: wrap; }
+  .adm-logo img { height: 48px; width: auto; }
+  .adm-tabs { display: flex; gap: 4px; flex-wrap: wrap; }
+  .adm-tabs button { background: var(--tone); border: 0; padding: 12px 16px; font-weight: 650; cursor: pointer; }
+  .adm-tabs button[aria-current] { background: var(--ink); color: #fff; }
+  .adm-user { margin-left: auto; display: flex; gap: 12px; align-items: center; }
+  .adm-main { padding: 24px 20px 80px; max-width: 1400px; margin: 0 auto; }
+  .pub { font-size: 15px; font-weight: 600; margin-bottom: 16px; min-height: 1.4em; }
+  .adm .head { font-size: 2rem; }
+  .card { background: #fff; padding: 24px; margin-top: 16px; display: grid; gap: 14px; }
+  .narrow { max-width: 480px; margin: 10vh auto; }
+  .bar { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; }
+  .bar-r { display: flex; gap: 8px; flex-wrap: wrap; }
+  .adm input:not([type='checkbox']), .adm select, .adm textarea { width: 100%; min-height: 44px; padding: 8px 12px; border: 1px solid #b9b9b0; background: #fff; border-radius: 0; font-size: 16px; }
+  .bar-r input, .bar-r select { width: auto; }
+  .adm label { display: grid; gap: 4px; font-weight: 600; font-size: 15px; }
+  .adm label.chk { display: flex; align-items: center; gap: 8px; }
+  .lbl { font-weight: 600; font-size: 15px; margin-top: 6px; }
+  .tbl { width: 100%; border-collapse: collapse; background: #fff; }
+  .tbl th, .tbl td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--tone); font-size: 15px; vertical-align: top; }
+  .tbl th { background: var(--tone); }
+  .tbl tr[data-id] { cursor: pointer; }
+  .tbl tr[data-id]:hover td { background: var(--paper); }
+  .pill { display: inline-block; padding: 2px 8px; font-size: 13px; background: var(--tone); }
+  .pill.on { background: #d6f0dc; }
+  .pill.off { background: #f6d6d6; }
+  .grid2 { display: grid; grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr); gap: 24px; }
+  .ad-imgs { grid-template-columns: 1fr 1fr; }
+  .grid3 { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; }
+  .col-main, .col-side { display: grid; gap: 12px; align-content: start; background: #fff; padding: 20px; }
+  .rte-bar { display: flex; flex-wrap: wrap; gap: 4px; }
+  .rte-bar button { border: 0; background: var(--tone); padding: 8px 12px; cursor: pointer; font-size: 14px; }
+  .rte-bar button:hover { background: var(--tone-2); }
+  .rte { min-height: 360px; padding: 16px; border: 1px solid #b9b9b0; background: #fff; font-size: 18px; line-height: 1.6; }
+  .rte p { margin-bottom: 1em; }
+  .rte h2 { font-size: 1.3rem; margin: 1em 0 0.4em; }
+  .rte ul { list-style: disc; padding-left: 1.2em; }
+  .rte ol { list-style: decimal; padding-left: 1.4em; }
+  .rte blockquote { background: var(--tone); padding: 12px 16px; }
+  .rte a { color: var(--red-ink); text-decoration: underline; }
+  .thumbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 6px; }
+  .thumbs figure { position: relative; aspect-ratio: 4 / 3; background: var(--tone); }
+  .thumbs img, .cover img { width: 100%; height: 100%; object-fit: cover; }
+  .thumbs button { position: absolute; top: 4px; right: 4px; border: 0; background: var(--ink); color: #fff; cursor: pointer; padding: 4px 8px; font-size: 13px; }
+  .cover { aspect-ratio: 16 / 9; background: var(--tone); }
+  .adprev { background: var(--tone); min-height: 80px; display: grid; place-items: center; font-size: 14px; color: var(--ink-soft); }
+  .adprev img { max-width: 100%; height: auto; }
+  .up { display: inline-flex !important; cursor: pointer; background: var(--tone); padding: 10px 14px; width: fit-content; }
+  .up input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+  .btn.danger { background: #8a0b10; }
+  .hint { font-size: 14px; color: var(--ink-soft); }
+  .msg { font-weight: 600; min-height: 1.4em; }
+  .err { color: var(--red-ink); font-weight: 600; }
+  .ad-h { font-size: 1.25rem; font-weight: 750; margin-top: 8px; }
+  @media (max-width: 900px) { .grid2, .ad-imgs { grid-template-columns: 1fr; } .tbl th:nth-child(n + 4), .tbl td:nth-child(n + 4) { display: none; } }
+</style>

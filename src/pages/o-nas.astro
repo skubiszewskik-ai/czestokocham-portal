@@ -1,0 +1,18 @@
+---
+import Page from '../components/Page.astro';
+import { SITE } from '../lib/site';
+---
+<Page title="O nas" lede="Piszemy o tym, co dzieje się w Częstochowie i powiecie." description="Częstokocham – kim jesteśmy i jak się z nami skontaktować.">
+  <h2>Częstokocham</h2>
+  <p>Jesteśmy lokalnym portalem informacyjnym Częstochowy i powiatu częstochowskiego. Na Facebooku obserwuje nas ponad 30 tysięcy osób. Informujemy o najważniejszych wydarzeniach w mieście i regionie: o inwestycjach, utrudnieniach, kulturze, sporcie i sprawach mieszkańców.</p>
+  <h2>Skąd bierzemy informacje</h2>
+  <p>Własne materiały redakcji, zgłoszenia mieszkańców oraz komunikaty instytucji. Komunikaty Urzędu Miasta Częstochowy publikujemy za zgodą urzędu i zawsze oznaczamy je dopiskiem „Źródło: czestochowa.pl” z odnośnikiem do oryginału.</p>
+  <h2>Kontakt z redakcją</h2>
+  <ul>
+    <li>E-mail: <a href={`mailto:${SITE.email}`}>{SITE.email}</a></li>
+    <li>Telefon: <a href={`tel:+48${SITE.phone.replace(/\s/g, '')}`}>{SITE.phone}</a></li>
+    <li>Facebook: <a href={SITE.facebook} rel="noopener" target="_blank">facebook.com/czestokocham</a></li>
+    <li>Instagram: <a href={SITE.instagram} rel="noopener" target="_blank">@czestokocham</a></li>
+  </ul>
+  <p>Wydawca: {SITE.company}, Częstochowa.</p>
+</Page>

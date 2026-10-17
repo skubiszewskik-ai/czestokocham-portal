@@ -1,0 +1,78 @@
+---
+import Icon from './Icon.astro';
+import { CATEGORIES, CATEGORY_KEYS, SITE } from '../lib/site';
+const mail = `mailto:${SITE.email}?subject=${encodeURIComponent('Temat dla Częstokocham')}`;
+---
+<footer class="foot">
+  <div class="wrap foot-in">
+    <div class="foot-top">
+      <div class="brand">
+        <img src="/logo-dark.svg" width="260" height="162" alt="Częstokocham" loading="lazy" />
+        <p>Portal informacyjny Częstochowy i powiatu częstochowskiego. Ponad 30 tysięcy osób śledzi nas na Facebooku.</p>
+        <div class="soc">
+          <a href={SITE.facebook} target="_blank" rel="noopener" aria-label="Facebook"><Icon name="facebook" /></a>
+          <a href={SITE.instagram} target="_blank" rel="noopener" aria-label="Instagram"><Icon name="instagram" /></a>
+          <a href={mail} aria-label="E-mail"><Icon name="mail" /></a>
+        </div>
+      </div>
+      <div class="cols">
+        <div>
+          <p class="f1">Działy</p>
+          <ul>
+            <li><a href="/">Najnowsze</a></li>
+            {CATEGORY_KEYS.map((k) => <li><a href={`/${k}`}>{CATEGORIES[k].title}</a></li>)}
+          </ul>
+        </div>
+        <div>
+          <p class="f1">Portal</p>
+          <ul>
+            <li><a href="/o-nas">O nas</a></li>
+            <li><a href="/reklama">Reklama</a></li>
+            <li><a href="/szukaj">Szukaj</a></li>
+            <li><a href="/rss.xml">Kanał RSS</a></li>
+          </ul>
+        </div>
+        <div>
+          <p class="f1">Redakcja</p>
+          <ul>
+            <li><a href={`mailto:${SITE.email}`}>{SITE.email}</a></li>
+            <li><a href={`tel:+48${SITE.phone.replace(/\s/g, '')}`}>{SITE.phone}</a></li>
+            <li>{SITE.company}</li>
+            <li>Częstochowa</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+    <div class="tipbox">
+      <p><strong>Widzisz coś ważnego w mieście?</strong> Wyślij nam zdjęcie albo kilka zdań – sprawdzimy i opiszemy.</p>
+      <a class="btn red" href={mail}><Icon name="mail" /> Zgłoś temat</a>
+    </div>
+    <p class="legal">
+      © {new Date().getFullYear()} Częstokocham · <a href="/polityka-prywatnosci">Polityka prywatności i cookies</a> · Artykuły oznaczone „Źródło: czestochowa.pl” publikujemy za zgodą Urzędu Miasta Częstochowy.
+    </p>
+  </div>
+</footer>
+<style>
+  .foot { background: var(--navy); color: var(--on-navy-soft); font-size: 16px; position: sticky; bottom: 0; z-index: 0; padding: 72px 0 32px; }
+  .foot-in { display: grid; gap: 48px; }
+  .foot-top { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.6fr); gap: 48px; }
+  .brand img { width: 240px; height: auto; margin-bottom: 20px; }
+  .brand p { max-width: 38ch; line-height: 1.55; }
+  .soc { display: flex; gap: 8px; margin-top: 20px; }
+  .soc a { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 12px; background: var(--navy-2); color: #fff; transition: background-color 0.2s, transform 0.2s var(--ease); }
+  .soc a:hover { background: var(--red); transform: translateY(-2px); }
+  .cols { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 32px; overflow-wrap: anywhere; }
+  .f1 { color: #fff; font-weight: 700; margin-bottom: 12px; }
+  .cols li { margin-top: 8px; }
+  .cols a { transition: color 0.2s; }
+  .cols a:hover { color: #fff; }
+  .tipbox { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 24px 28px; border-radius: var(--r-lg); background: var(--navy-2); color: #fff; }
+  .tipbox p { font-size: 18px; }
+  .legal { font-size: 14px; }
+  .legal a { text-decoration: underline; text-underline-offset: 3px; }
+  @media (max-width: 900px) {
+    .foot-top { grid-template-columns: 1fr; }
+    .cols { grid-template-columns: 1fr 1fr; }
+    .tipbox { flex-direction: column; align-items: flex-start; }
+  }
+</style>

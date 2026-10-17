@@ -1,0 +1,14 @@
+---
+import Page from '../components/Page.astro';
+import { SITE } from '../lib/site';
+---
+<Page title="Prywatność" lede="Polityka prywatności i plików cookies." description="Polityka prywatności i plików cookies portalu Częstokocham.">
+  <h2>Administrator</h2>
+  <p>Administratorem danych jest {SITE.company} z siedzibą w Częstochowie, kontakt: <a href={`mailto:${SITE.email}`}>{SITE.email}</a>.</p>
+  <h2>Jakie dane zbieramy</h2>
+  <p>Portal można czytać bez zakładania konta. Jeśli napiszesz do nas e-mail, przetwarzamy Twój adres i treść wiadomości wyłącznie po to, aby odpowiedzieć lub opisać zgłoszony temat.</p>
+  <h2>Pliki cookies i reklamy</h2>
+  <p>Sama strona nie zapisuje plików cookies. Pliki cookies mogą zapisywać usługi zewnętrzne: Google AdSense (wyświetlanie reklam) oraz Google Analytics (statystyki odwiedzin), o ile są włączone. Zgodę na ich użycie zbiera komunikat Google wyświetlany przy pierwszej wizycie. Szczegóły: <a href="https://policies.google.com/technologies/ads?hl=pl" rel="noopener" target="_blank">jak Google wykorzystuje pliki cookie w reklamach</a>.</p>
+  <h2>Twoje prawa</h2>
+  <p>Masz prawo dostępu do swoich danych, ich sprostowania, usunięcia, ograniczenia przetwarzania oraz wniesienia skargi do Prezesa UODO.</p>
+</Page>

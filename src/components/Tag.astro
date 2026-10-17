@@ -1,0 +1,8 @@
+---
+import { CATEGORIES, type CategoryKey } from '../lib/site';
+interface Props { cat: CategoryKey; dark?: boolean; link?: boolean }
+const { cat, dark = false, link = false } = Astro.props;
+const c = CATEGORIES[cat] || CATEGORIES.miasto;
+const El = link ? 'a' : 'span';
+---
+<El class:list={['tag', { 'on-dark': dark }]} style={`--c:${c.color}`} href={link ? `/${cat}` : undefined}>{c.name}</El>

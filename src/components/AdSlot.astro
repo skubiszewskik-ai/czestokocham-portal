@@ -1,0 +1,66 @@
+---
+// Miejsce reklamowe: baner z panelu → Google AdSense → (tylko w głównych miejscach) zaproszenie do reklamy
+import Icon from './Icon.astro';
+import type { Ad, Settings } from '../lib/db';
+import { SLOTS, type SlotKey } from '../lib/slots';
+interface Props { slot: SlotKey; ads: Partial<Record<SlotKey, Ad[]>>; settings: Settings; class?: string; house?: boolean }
+const { slot, ads, settings, class: cls, house = false } = Astro.props;
+const def = SLOTS[slot];
+const list = ads[slot] || [];
+const adsenseSlot = settings.adsenseEnabled && settings.adsenseClient ? settings.adsenseSlots?.[slot] : undefined;
+const [dw, dh] = def.desktop;
+const [mw, mh] = def.mobile || def.desktop;
+const show = list.length > 0 || adsenseSlot || house;
+---
+{show && (
+  <aside class:list={['ad', cls, { 'ad--desktop': !def.mobile }]} style={`--dw:${dw};--dh:${dh};--mw:${mw};--mh:${mh}`} aria-label="Reklama" data-slot={slot}>
+    {list.length > 0 ? (
+      <div class="ad-box" data-rotate>
+        {list.map((ad, i) => (
+          <a href={ad.link} rel="sponsored noopener" target="_blank" class="ad-item" hidden={i > 0} data-weight={ad.weight} data-start={ad.start ? +ad.start : undefined} data-end={ad.end ? +ad.end : undefined}>
+            <picture>
+              {ad.mobile && ad.desktop && <source media="(max-width: 760px)" srcset={ad.mobile.url} width={ad.mobile.w} height={ad.mobile.h} />}
+              <img src={(ad.desktop || ad.mobile)!.url} width={(ad.desktop || ad.mobile)!.w} height={(ad.desktop || ad.mobile)!.h} alt={ad.alt} loading="lazy" decoding="async" />
+            </picture>
+          </a>
+        ))}
+      </div>
+    ) : adsenseSlot ? (
+      <div class="ad-box ad-box--auto">
+        <ins class="adsbygoogle" style="display:block;width:100%;height:100%" data-ad-client={settings.adsenseClient} data-ad-slot={adsenseSlot} data-ad-format="auto" data-full-width-responsive="true"></ins>
+      </div>
+    ) : (
+      <a class="ad-box ad-house" href="/reklama">
+        <img src="/favicon.svg" width="40" height="40" alt="" loading="lazy" />
+        <span class="ad-house-t">Twoja reklama w Częstochowie</span>
+        <span class="ad-house-s num">Baner {dw}×{dh} px · 30 tys. obserwujących</span>
+        <span class="ad-house-c">Sprawdź ofertę <Icon name="arrow" /></span>
+      </a>
+    )}
+    <span class="ad-label">Reklama</span>
+  </aside>
+)}
+<style>
+  .ad { margin-inline: auto; width: 100%; max-width: calc(var(--dw) * 1px); }
+  .ad-label { display: block; font-size: 12.5px; line-height: 1; color: var(--ink-soft); margin-top: 6px; text-align: right; }
+  .ad-box { position: relative; width: 100%; aspect-ratio: var(--dw) / var(--dh); background: var(--paper); overflow: hidden; border-radius: var(--r-md); }
+  .ad-item, .ad-item picture, .ad-item img { display: block; width: 100%; height: 100%; }
+  .ad-item img { object-fit: cover; }
+  .ad-house {
+    display: flex; flex-direction: column; justify-content: center; align-items: flex-start; gap: 6px; padding: clamp(18px, 3vw, 40px);
+    background: radial-gradient(circle at 1px 1px, rgb(22 24 48 / 0.09) 1px, transparent 0) 0 0 / 14px 14px, var(--paper);
+    transition: background-color 0.25s;
+  }
+  .ad-house img { width: 34px; height: 34px; border-radius: 9px; margin-bottom: 6px; }
+  .ad-house:hover { background-color: var(--tone); }
+  .ad-house-t { font-weight: 800; font-stretch: 88%; font-size: clamp(1.15rem, 0.9rem + 0.8vw, 1.6rem); line-height: 1.1; letter-spacing: -0.015em; }
+  .ad-house-s { font-size: 15px; color: var(--ink-soft); }
+  .ad-house-c { margin-top: 8px; display: inline-flex; align-items: center; gap: 6px; font-weight: 700; font-size: 15px; color: var(--red-ink); transition: gap 0.25s var(--ease); }
+  .ad-house-c :global(svg) { width: 16px; height: 16px; }
+  .ad-house:hover .ad-house-c { gap: 10px; }
+  @media (max-width: 760px) {
+    .ad { max-width: calc(var(--mw) * 1px); }
+    .ad-box { aspect-ratio: var(--mw) / var(--mh); }
+    .ad--desktop { display: none; }
+  }
+</style>

@@ -1,0 +1,117 @@
+---
+import '../styles/global.css';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+import { SITE } from '../lib/site';
+import type { Settings } from '../lib/db';
+
+interface Props {
+  title?: string;
+  description?: string;
+  image?: string | null;
+  type?: 'website' | 'article';
+  settings: Settings;
+  active?: string;
+  noindex?: boolean;
+  jsonld?: Record<string, unknown> | Record<string, unknown>[];
+  preload?: { href: string; srcset?: string; sizes?: string } | null;
+}
+const { title, description = SITE.description, image, type = 'website', settings, active, noindex, jsonld, preload } = Astro.props;
+const fullTitle = title ? `${title} – ${SITE.name}` : `${SITE.name} – ${SITE.tagline}`;
+const canonical = new URL(Astro.url.pathname, Astro.site).toString();
+const ogImage = image ? new URL(image, Astro.site).toString() : new URL('/og.png', Astro.site).toString();
+const adsense = settings.adsenseEnabled && settings.adsenseClient ? settings.adsenseClient : '';
+---
+<!doctype html>
+<html lang="pl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{fullTitle}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+    {noindex && <meta name="robots" content="noindex" />}
+    <meta name="theme-color" content="#1a1b2e" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="alternate" type="application/rss+xml" title={SITE.name} href="/rss.xml" />
+    <link rel="preload" href="/fonts/archivo-latin.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/archivo-latin-ext.woff2" as="font" type="font/woff2" crossorigin />
+    {preload && <link rel="preload" as="image" href={preload.href} imagesrcset={preload.srcset} imagesizes={preload.sizes} fetchpriority="high" />}
+    <meta property="og:site_name" content={SITE.name} />
+    <meta property="og:locale" content="pl_PL" />
+    <meta property="og:type" content={type} />
+    <meta property="og:title" content={title || SITE.name} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={ogImage} />
+    <meta name="twitter:card" content="summary_large_image" />
+    {adsense && <meta name="google-adsense-account" content={adsense} />}
+    {jsonld && <script type="application/ld+json" set:html={JSON.stringify(jsonld)} />}
+    <script is:inline>document.documentElement.classList.add('js')</script>
+  </head>
+  <body>
+    <a class="skip" href="#tresc">Przejdź do treści</a>
+    <Header active={active} />
+    <main id="tresc">
+      <slot />
+    </main>
+    <Footer />
+    <script is:inline define:vars={{ adsense, ga: settings.analyticsId || '' }}>
+      (function () {
+        // wejścia sekcji
+        var els = document.querySelectorAll('.rise');
+        if ('IntersectionObserver' in window) {
+          var io = new IntersectionObserver(function (es) {
+            es.forEach(function (e) { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } });
+          }, { rootMargin: '0px 0px -8% 0px' });
+          els.forEach(function (el) { io.observe(el); });
+        } else els.forEach(function (el) { el.classList.add('in'); });
+        // „2 godz. temu” – strona jest statyczna, więc czas względny liczymy w przeglądarce
+        var rtf = window.Intl && Intl.RelativeTimeFormat ? new Intl.RelativeTimeFormat('pl', { numeric: 'auto' }) : null;
+        document.querySelectorAll('time[data-ago]').forEach(function (t) {
+          var d = new Date(t.getAttribute('datetime')), m = Math.round((Date.now() - d) / 60000);
+          if (!rtf || m < 0) return;
+          if (m < 60) t.textContent = m < 1 ? 'przed chwilą' : rtf.format(-m, 'minute');
+          else if (m < 24 * 60) t.textContent = rtf.format(-Math.floor(m / 60), 'hour');
+          else if (m < 48 * 60) t.textContent = 'wczoraj, ' + d.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' });
+          else t.textContent = d.toLocaleDateString('pl-PL', { day: 'numeric', month: 'short' });
+        });
+        // rotacja banerów (losowo, z wagą)
+        var now = Date.now();
+        document.querySelectorAll('[data-rotate]').forEach(function (box) {
+          // tylko banery w okresie emisji (strona jest statyczna, więc daty sprawdzamy w przeglądarce)
+          var items = [].slice.call(box.children).filter(function (a) {
+            return !(a.dataset.start && now < +a.dataset.start) && !(a.dataset.end && now > +a.dataset.end);
+          }), sum = 0;
+          if (!items.length) { box.closest('.ad').hidden = true; return; }
+          items.forEach(function (a) { sum += +a.dataset.weight || 1; });
+          var r = Math.random() * sum, pick = items[0];
+          for (var i = 0; i < items.length; i++) { r -= +items[i].dataset.weight || 1; if (r <= 0) { pick = items[i]; break; } }
+          [].forEach.call(box.children, function (a) { a.hidden = a !== pick; });
+        });
+        // reklamy Google i statystyki ładowane dopiero po pierwszej interakcji – zero wpływu na PageSpeed
+        var loaded = false;
+        function late() {
+          if (loaded) return; loaded = true;
+          if (adsense && document.querySelector('.adsbygoogle')) {
+            var s = document.createElement('script');
+            s.async = true; s.crossOrigin = 'anonymous';
+            s.src = 'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=' + adsense;
+            document.head.appendChild(s);
+            document.querySelectorAll('.adsbygoogle').forEach(function () { (window.adsbygoogle = window.adsbygoogle || []).push({}); });
+          }
+          if (ga) {
+            var g = document.createElement('script'); g.async = true;
+            g.src = 'https://www.googletagmanager.com/gtag/js?id=' + ga; document.head.appendChild(g);
+            window.dataLayer = window.dataLayer || [];
+            window.gtag = function () { dataLayer.push(arguments); };
+            gtag('js', new Date()); gtag('config', ga);
+          }
+        }
+        ['scroll', 'pointerdown', 'keydown', 'touchstart'].forEach(function (ev) { addEventListener(ev, late, { once: true, passive: true }); });
+        setTimeout(late, 6000);
+      })();
+    </script>
+  </body>
+</html>

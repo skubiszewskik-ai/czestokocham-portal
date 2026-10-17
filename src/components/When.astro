@@ -1,0 +1,7 @@
+---
+// Data publikacji; w przeglądarce zamieniana na „2 godz. temu” (strona jest statyczna)
+import { fmtDate, fmtTime } from '../lib/site';
+interface Props { d: Date; full?: boolean }
+const { d, full = false } = Astro.props;
+---
+<time class="num" datetime={d.toISOString()} data-ago={full ? undefined : ''}>{fmtDate(d)}{full ? `, ${fmtTime(d)}` : ''}</time>

@@ -1,0 +1,8 @@
+---
+import CategoryPage from '../../components/CategoryPage.astro';
+import { CATEGORY_KEYS, type CategoryKey } from '../../lib/site';
+export function getStaticPaths() {
+  return CATEGORY_KEYS.map((k) => ({ params: { kategoria: k } }));
+}
+---
+<CategoryPage kategoria={Astro.params.kategoria as CategoryKey} page={1} />

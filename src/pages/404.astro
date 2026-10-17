@@ -1,0 +1,17 @@
+---
+import Base from '../layouts/Base.astro';
+import { settings as getSettings } from '../lib/db';
+const settings = await getSettings();
+Astro.response.status = 404;
+---
+<Base title="Nie ma takiej strony" settings={settings} noindex>
+  <section class="wrap nf">
+    <h1 class="t-xl">Tej strony nie ma</h1>
+    <p class="lead">Wiadomość mogła zostać przeniesiona albo adres jest niepełny.</p>
+    <p><a class="btn red" href="/">Wróć do najnowszych wiadomości</a> <a class="btn" href="/szukaj">Szukaj</a></p>
+  </section>
+</Base>
+<style>
+  .nf { padding-top: clamp(48px, 10vw, 160px); display: grid; gap: 24px; }
+  .nf p:last-child { display: flex; gap: 8px; flex-wrap: wrap; }
+</style>

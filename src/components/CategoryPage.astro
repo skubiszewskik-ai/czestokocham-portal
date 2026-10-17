@@ -1,0 +1,107 @@
+---
+import Base from '../layouts/Base.astro';
+import AdSlot from './AdSlot.astro';
+import Card from './Card.astro';
+import Row from './Row.astro';
+import Pic from './Pic.astro';
+import Tag from './Tag.astro';
+import When from './When.astro';
+import Icon from './Icon.astro';
+import { latest, settings as getSettings, ads as getAds } from '../lib/db';
+import { CATEGORIES, CATEGORY_KEYS, articleUrl, type CategoryKey } from '../lib/site';
+import { PER, pageUrl } from '../lib/paging';
+
+interface Props { kategoria: CategoryKey; page: number }
+const { kategoria, page } = Astro.props;
+const items = latest({ category: kategoria, limit: PER + 1, offset: (page - 1) * PER });
+const settings = getSettings();
+const ads = getAds();
+const hasNext = items.length > PER;
+const list = items.slice(0, PER);
+const cat = CATEGORIES[kategoria];
+const first = page === 1 ? list.find((a) => a.cover) : undefined;
+const pair = page === 1 ? list.filter((a) => a.cover && a.id !== first?.id).slice(0, 2) : [];
+const used = new Set([first?.id, ...pair.map((a) => a.id)]);
+const rows = list.filter((a) => !used.has(a.id));
+const others = latest({ limit: 6 }).filter((a) => a.category !== kategoria).slice(0, 5);
+---
+<Base title={page > 1 ? `${cat.title} – strona ${page}` : cat.title} description={cat.lede} settings={settings} active={kategoria} noindex={page > 1}>
+  <section class="wrap c-head" style={`--c:${cat.color}`}>
+    <div>
+      <span class="tag" style={`--c:${cat.color}`}>{cat.name}</span>
+      <h1 class="t-xl">{cat.title}</h1>
+      <p class="lead soft">{cat.lede}</p>
+    </div>
+    <nav class="c-nav" aria-label="Inne działy">
+      {CATEGORY_KEYS.filter((k) => k !== kategoria).map((k) => <a href={`/${k}`} style={`--c:${CATEGORIES[k].color}`}>{CATEGORIES[k].name}</a>)}
+    </nav>
+  </section>
+
+  {first && (
+    <section class="wrap c-top">
+      <a class="c-lead" href={articleUrl(first)}>
+        <span class="ph c-lead-pic"><Pic img={first.cover} sizes="(max-width: 900px) 100vw, 760px" eager alt="" /></span>
+        <span class="card-meta"><Tag cat={first.category} /><When d={first.publishedAt} /></span>
+        <h2 class="c-lead-t">{first.title}</h2>
+        {first.lead && <p class="c-lead-l">{first.lead}</p>}
+      </a>
+      <div class="c-pair">{pair.map((a, i) => <Card a={a} i={i} level="h2" sizes="(max-width: 900px) 50vw, 420px" />)}</div>
+    </section>
+  )}
+
+  <div class="wrap section"><AdSlot slot="billboard" ads={ads} settings={settings} house /></div>
+
+  <section class="wrap section c-body" aria-label="Wiadomości">
+    <div>
+      {list.length === 0 && <p class="lead empty">W tym dziale nie ma jeszcze wiadomości. Zajrzyj na <a class="link" href="/">stronę główną</a>.</p>}
+      {rows.map((a, i) => (
+        <>
+          <Row a={a} level="h2" />
+          {i === 5 && <div class="inl"><AdSlot slot="list-inline" ads={ads} settings={settings} /></div>}
+        </>
+      ))}
+      <nav class="pager" aria-label="Strony">
+        {page > 1 && <a class="btn ghost" href={pageUrl(kategoria, page - 1)}>Nowsze</a>}
+        {hasNext && <a class="btn" href={pageUrl(kategoria, page + 1)}>Starsze wiadomości <Icon name="arrow" /></a>}
+      </nav>
+    </div>
+    <aside class="c-side">
+      <div class="side-sticky">
+        <AdSlot slot="sidebar" ads={ads} settings={settings} house />
+        {others.length > 0 && (
+          <div class="side-box">
+            <h2 class="side-h">Z innych działów</h2>
+            {others.map((a) => <Row a={a} compact />)}
+          </div>
+        )}
+      </div>
+    </aside>
+  </section>
+</Base>
+<style>
+  .c-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; flex-wrap: wrap; padding-top: clamp(28px, 4vw, 56px); }
+  .c-head h1 { margin: 14px 0 10px; }
+  .c-head .lead { max-width: 52ch; }
+  .c-nav { display: flex; gap: 6px; flex-wrap: wrap; }
+  .c-nav a { padding: 9px 14px; border-radius: 999px; background: var(--paper); font-weight: 650; font-size: 15px; transition: background-color 0.2s, color 0.2s; }
+  .c-nav a:hover { background: var(--c); color: #fff; }
+  .c-top { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); gap: var(--gap); margin-top: 32px; }
+  .c-lead { display: flex; flex-direction: column; gap: 12px; }
+  .c-lead-pic { aspect-ratio: 16 / 9; border-radius: var(--r-lg); }
+  .c-lead-t { font-size: clamp(1.6rem, 1rem + 1.8vw, 2.5rem); font-weight: 800; font-stretch: 88%; line-height: 1.06; letter-spacing: -0.02em; text-wrap: balance; transition: color 0.2s; }
+  .c-lead-l { font-size: 17px; color: var(--ink-2); max-width: 64ch; }
+  .c-lead:hover .c-lead-t { color: var(--red-ink); }
+  .c-lead:hover .c-lead-pic :global(img) { transform: scale(1.03); }
+  .c-pair { display: grid; gap: var(--gap); align-content: start; }
+  .c-body { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 48px; align-items: start; }
+  .inl { padding: 24px 0; }
+  .empty { padding: 40px 0; }
+  .pager { display: flex; gap: 10px; justify-content: flex-start; margin-top: 32px; }
+  .side-sticky { position: sticky; top: 100px; display: grid; gap: 32px; }
+  .side-box { background: var(--paper); border-radius: var(--r-lg); padding: 8px 20px 4px; }
+  .side-h { font-size: 18px; font-weight: 800; padding: 14px 0 4px; }
+  .side-box :global(.row:last-child) { border-bottom: 0; }
+  @media (max-width: 1100px) { .c-body { grid-template-columns: 1fr; } .c-side { display: none; } }
+  @media (max-width: 900px) { .c-top { grid-template-columns: 1fr; } .c-pair { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 760px) { .c-pair :global(.card-t) { font-size: 16px; } }
+</style>

@@ -1,0 +1,22 @@
+---
+import Page from '../components/Page.astro';
+import { SLOTS } from '../lib/slots';
+import { SITE } from '../lib/site';
+const mail = `mailto:${SITE.email}?subject=${encodeURIComponent('Reklama na portalu Częstokocham')}`;
+---
+<Page title="Reklama" lede="Dotrzyj do mieszkańców Częstochowy i powiatu." description="Formaty i wymiary banerów reklamowych na portalu Częstokocham.">
+  <h2>Formaty banerów</h2>
+  <p>Banery emitujemy w stałych miejscach strony. Każdy ma osobną wersję na komputer i na telefon. Przygotuj grafikę w podanym wymiarze albo dwukrotnie większą (ostrzejsza na ekranach o dużej gęstości). Przyjmujemy JPG, PNG, WebP i GIF.</p>
+  <table>
+    <thead><tr><th>Miejsce</th><th>Komputer</th><th>Telefon</th><th>Gdzie</th></tr></thead>
+    <tbody>
+      {Object.values(SLOTS).map((s) => (
+        <tr><td>{s.name}</td><td class="num">{s.desktop.join('×')}</td><td class="num">{s.mobile ? s.mobile.join('×') : '—'}</td><td>{s.where}</td></tr>
+      ))}
+    </tbody>
+  </table>
+  <h2>Wpis sponsorowany i posty</h2>
+  <p>Publikujemy też artykuły sponsorowane oraz posty na naszym profilu na Facebooku. Materiały sponsorowane są zawsze oznaczone.</p>
+  <h2>Zapytaj o termin</h2>
+  <p><a href={mail}>{SITE.email}</a> · <a href={`tel:+48${SITE.phone.replace(/\s/g, '')}`}>{SITE.phone}</a></p>
+</Page>

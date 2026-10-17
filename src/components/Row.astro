@@ -1,0 +1,37 @@
+---
+// Wiadomość w liście: miniatura + tytuł + wstęp
+import Pic from './Pic.astro';
+import Tag from './Tag.astro';
+import When from './When.astro';
+import type { Article } from '../lib/db';
+import { articleUrl } from '../lib/site';
+interface Props { a: Article; level?: 'h2' | 'h3'; compact?: boolean }
+const { a, level = 'h3', compact = false } = Astro.props;
+const H = level;
+---
+<a class:list={['row', { compact }]} href={articleUrl(a)} data-cat={a.category}>
+  <span class="row-body">
+    <span class="card-meta"><Tag cat={a.category} /><When d={a.publishedAt} /></span>
+    <H class="row-t">{a.title}</H>
+    {!compact && a.lead && <span class="row-l">{a.lead}</span>}
+  </span>
+  <span class="ph row-pic"><Pic img={a.cover} sizes={compact ? '96px' : '(max-width: 760px) 104px, 200px'} alt="" /></span>
+</a>
+<style>
+  .row { display: grid; grid-template-columns: minmax(0, 1fr) 200px; gap: 20px; align-items: center; padding: 18px 0; border-bottom: 1px solid var(--line); }
+  .row-body { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .row-t { font-size: 20px; font-weight: 700; line-height: 1.25; letter-spacing: -0.01em; text-wrap: pretty; transition: color 0.2s; }
+  .row-l { font-size: 16px; line-height: 1.5; color: var(--ink-2); max-width: 68ch; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .row-pic { aspect-ratio: 3 / 2; border-radius: var(--r-sm); }
+  .row:hover .row-t { color: var(--red-ink); }
+  .row:hover .row-pic :global(img) { transform: scale(1.05); }
+  .compact { grid-template-columns: minmax(0, 1fr) 96px; gap: 14px; padding: 14px 0; }
+  .compact .row-t { font-size: 16px; line-height: 1.3; }
+  .compact .row-pic { aspect-ratio: 1; }
+  @media (max-width: 760px) {
+    .row { grid-template-columns: minmax(0, 1fr) 104px; gap: 14px; padding: 16px 0; }
+    .row-t { font-size: 17px; }
+    .row-l { display: none; }
+    .row-pic { aspect-ratio: 1; }
+  }
+</style>

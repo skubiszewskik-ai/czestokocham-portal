@@ -1,0 +1,21 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Strona jest statyczna – bazę czyta tylko panel redakcji i automat publikacji (konto serwisowe omija reguły)
+    function isAdmin() {
+      return request.auth != null
+        && request.auth.token.email_verified == true
+        && exists(/databases/$(database)/documents/config/admins)
+        && request.auth.token.email.lower() in get(/databases/$(database)/documents/config/admins).data.emails;
+    }
+    match /articles/{id} { allow read, write: if isAdmin(); }
+    match /ads/{id} { allow read, write: if isAdmin(); }
+    match /config/{id} { allow read, write: if isAdmin(); }
+    match /uploads/{id} {
+      allow create: if isAdmin() && request.resource.data.data is string && request.resource.data.data.size() < 1000000
+        && request.resource.data.path.matches('^(u|ads)/[a-z0-9./-]+$');
+      allow read, delete: if isAdmin();
+    }
+    match /imports/{id} { allow read: if isAdmin(); allow write: if false; }
+  }
+}

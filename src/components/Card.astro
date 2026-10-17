@@ -1,0 +1,19 @@
+---
+import Pic from './Pic.astro';
+import Tag from './Tag.astro';
+import When from './When.astro';
+import type { Article } from '../lib/db';
+import { articleUrl } from '../lib/site';
+interface Props { a: Article; sizes?: string; lead?: boolean; level?: 'h2' | 'h3'; i?: number; eager?: boolean }
+const { a, sizes = '(max-width: 760px) 100vw, 25vw', lead = false, level = 'h3', i = 0, eager = false } = Astro.props;
+const H = level;
+---
+<a class="card rise" href={articleUrl(a)} style={`--i:${i}`}>
+  <span class="ph"><Pic img={a.cover} sizes={sizes} alt="" eagerNoPriority={eager} /></span>
+  <span class="card-meta"><Tag cat={a.category} /><When d={a.publishedAt} /></span>
+  <H class="card-t">{a.title}</H>
+  {lead && a.lead && <p class="card-l">{a.lead}</p>}
+</a>
+<style>
+  .card-l { font-size: 16px; line-height: 1.5; color: var(--ink-2); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+</style>

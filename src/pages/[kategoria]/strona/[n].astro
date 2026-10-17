@@ -1,0 +1,13 @@
+---
+import CategoryPage from '../../../components/CategoryPage.astro';
+import { CATEGORY_KEYS, type CategoryKey } from '../../../lib/site';
+import { latest } from '../../../lib/db';
+import { PER } from '../../../lib/paging';
+export function getStaticPaths() {
+  return CATEGORY_KEYS.flatMap((k) => {
+    const pages = Math.ceil(latest({ category: k, limit: 1e6 }).length / PER);
+    return Array.from({ length: Math.max(0, pages - 1) }, (_, i) => ({ params: { kategoria: k, n: String(i + 2) } }));
+  });
+}
+---
+<CategoryPage kategoria={Astro.params.kategoria as CategoryKey} page={Number(Astro.params.n)} />

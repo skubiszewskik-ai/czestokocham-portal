@@ -1,0 +1,74 @@
+---
+import Base from '../layouts/Base.astro';
+import { settings as getSettings } from '../lib/db';
+const settings = getSettings();
+---
+<Base title="Szukaj" settings={settings} active="szukaj" noindex>
+  <section class="wrap s-top">
+    <h1 class="t-l">Szukaj w wiadomościach</h1>
+    <form action="/szukaj" method="get" role="search" class="s-form">
+      <label for="q" class="sr-only">Czego szukasz?</label>
+      <input id="q" name="q" type="search" placeholder="np. Aleja NMP, Raków, Blachownia" autocomplete="off" />
+      <button class="btn red" type="submit">Szukaj</button>
+    </form>
+    <p class="soft s-count" id="s-count" role="status"></p>
+  </section>
+  <section class="wrap s-list"><ol id="s-res" class="s-res"></ol></section>
+  <script is:inline>
+    (function () {
+      var form = document.querySelector('.s-form'), input = document.getElementById('q');
+      var out = document.getElementById('s-res'), count = document.getElementById('s-count');
+      var data = null;
+      var norm = function (s) { return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/ł/g, 'l'); };
+      var esc = function (s) { return s.replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
+      function run(q) {
+        var words = norm(q).split(/[^a-z0-9]+/).filter(function (w) { return w.length > 2; });
+        if (!words.length) { out.innerHTML = ''; count.textContent = q ? 'Wpisz co najmniej 3 litery.' : ''; return; }
+        var res = data.filter(function (r) {
+          var hay = r.k + ' ' + norm(r.t);
+          return words.every(function (w) { return hay.indexOf(w) > -1; });
+        }).slice(0, 60);
+        count.textContent = res.length ? 'Znaleźliśmy ' + res.length + ' wiadomości dla „' + q + '”.' : 'Brak wyników dla „' + q + '”. Spróbuj krótszego słowa.';
+        out.innerHTML = res.map(function (r) {
+          return '<li><a href="' + r.u + '"><span class="s-d num">' + r.d.split('-').reverse().join('.') + '</span><span class="s-t">' + esc(r.t) + '</span><span class="s-c">' + r.c + '</span>' +
+            (r.i ? '<img src="' + r.i + '" alt="" width="120" height="80" loading="lazy">' : '<span></span>') + '</a></li>';
+        }).join('');
+      }
+      function go(q) {
+        if (data) return run(q);
+        count.textContent = 'Szukam…';
+        fetch('/search.json').then(function (r) { return r.json(); }).then(function (d) { data = d; run(q); });
+      }
+      var q0 = new URLSearchParams(location.search).get('q') || '';
+      input.value = q0;
+      if (q0) go(q0);
+      form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        history.replaceState(null, '', '/szukaj?q=' + encodeURIComponent(input.value));
+        go(input.value.trim());
+      });
+    })();
+  </script>
+</Base>
+<style>
+  .s-top { padding-top: clamp(40px, 6vw, 96px); }
+  .s-form { display: flex; gap: 8px; margin-top: 32px; max-width: 760px; }
+  .s-form input { flex: 1; min-width: 0; min-height: 56px; padding: 0 22px; font-size: 18px; border: 2px solid transparent; background: var(--paper); border-radius: 999px; transition: border-color 0.2s, background-color 0.2s; }
+  .s-form input:focus { outline: none; border-color: var(--ink); background: #fff; }
+  .s-form .btn { min-height: 56px; }
+  .s-count { margin-top: 16px; min-height: 1.5em; }
+  .s-list { margin-top: 32px; }
+  .s-res { display: flex; flex-direction: column; gap: 4px; max-width: 1100px; }
+  .s-res :global(a) { display: grid; grid-template-columns: 90px minmax(0, 1fr) 80px 120px; gap: 20px; align-items: center; min-height: 92px; padding: 14px 0; border-bottom: 1px solid var(--line); transition: color 0.2s; }
+    .s-res :global(a:hover) { color: var(--red-ink); }
+  .s-res :global(.s-d) { font-size: 16px; font-weight: 700; color: var(--red-ink); }
+  .s-res :global(.s-t) { font-size: 18px; font-weight: 650; line-height: 1.25; }
+  .s-res :global(.s-c) { font-size: 15px; color: var(--ink-soft); text-align: right; }
+  .s-res :global(img) { width: 120px; height: 80px; object-fit: cover; border-radius: var(--r-sm); }
+  @media (max-width: 760px) {
+    .s-res :global(a) { grid-template-columns: minmax(0, 1fr) 96px; gap: 6px 14px; padding: 14px; }
+    .s-res :global(.s-c) { display: none; }
+    .s-res :global(.s-d) { font-size: 15px; grid-column: 1; }
+    .s-res :global(img) { grid-column: 2; grid-row: 1 / span 2; width: 96px; height: 64px; }
+  }
+</style>

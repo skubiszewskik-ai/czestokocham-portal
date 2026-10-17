@@ -1,0 +1,29 @@
+---
+import type { Img } from '../lib/db';
+interface Props { img: Img | null; sizes?: string; eager?: boolean; eagerNoPriority?: boolean; alt?: string; class?: string }
+const { img, sizes = '100vw', eager = false, eagerNoPriority = false, alt, class: cls } = Astro.props;
+const set = img?.srcset?.length ? [...img.srcset].sort((a, b) => a.w - b.w) : [];
+const mid = set.find((v) => v.w >= 900) || set[set.length - 1];
+---
+{img && mid ? (
+  <img
+    class={cls}
+    src={mid.url}
+    srcset={set.map((v) => `${v.url} ${v.w}w`).join(', ')}
+    sizes={sizes}
+    width={img.w}
+    height={img.h}
+    alt={alt ?? img.alt}
+    loading={eager || eagerNoPriority ? 'eager' : 'lazy'}
+    decoding={eager ? 'sync' : 'async'}
+    fetchpriority={eager ? 'high' : undefined}
+  />
+) : (
+  <span class:list={['nopic', cls]} aria-hidden="true">
+    <svg viewBox="0 0 64 64" width="64" height="64"><path d="M27 46 V24 h2 v-6 h2 v-6 l1 -9 l1 9 h2 v6 h2 v6 h2 v22 Z" fill="currentColor"/><path d="M6 44 L58 36 L55 52 L4 58 Z" fill="currentColor"/></svg>
+  </span>
+)}
+<style>
+  .nopic { display: grid; place-items: center; width: 100%; height: 100%; background: var(--navy); color: var(--red); }
+  .nopic svg { width: 28%; height: auto; }
+</style>

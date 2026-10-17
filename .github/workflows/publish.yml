@@ -1,0 +1,70 @@
+# Automat Częstokocham (darmowy): co 30 minut sprawdza panel, a po 15:00 (czas polski) pobiera aktualności
+# z czestochowa.pl, buduje stronę i wdraża ją na Firebase Hosting (plan Spark).
+name: Publikacja
+
+on:
+  schedule:
+    - cron: '*/30 4-21 * * *' # 6:00–23:30 w Polsce
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'build albo import'
+        default: build
+
+concurrency:
+  group: publikacja
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run: ${{ steps.c.outputs.run }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            scripts/check.mjs
+            lib/firestore.js
+          sparse-checkout-cone-mode: false
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: npm i --no-save --no-package-lock firebase-admin@14.5.0
+      - id: c
+        if: github.event_name == 'schedule'
+        run: node scripts/check.mjs
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+
+  publish:
+    needs: check
+    if: github.event_name == 'workflow_dispatch' || needs.check.outputs.run != 'none'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - name: Klucz konta serwisowego
+        run: echo "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/sa.json"
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+      - name: Import, build i wdrożenie
+        run: node scripts/publish.mjs ${{ (needs.check.outputs.run == 'import' || inputs.mode == 'import') && '--import' || '' }}
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/sa.json
+          ADMIN_EMAILS: skubiszewskik@gmail.com,czestokocham@gmail.com
+      - name: Zapis nowych zdjęć i kopii artykułów w repozytorium
+        run: |
+          git config user.name "Automat Częstokocham"
+          git config user.email "actions@users.noreply.github.com"
+          git add public/media data
+          git diff --cached --quiet || git commit -m "Publikacja $(date -u +%F\ %H:%M) UTC"
+          git push
+      - if: always()
+        run: rm -f "$RUNNER_TEMP/sa.json"

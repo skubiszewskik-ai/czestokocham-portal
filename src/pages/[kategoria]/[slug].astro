@@ -1,0 +1,237 @@
+---
+import Base from '../../layouts/Base.astro';
+import Pic from '../../components/Pic.astro';
+import AdSlot from '../../components/AdSlot.astro';
+import Card from '../../components/Card.astro';
+import Row from '../../components/Row.astro';
+import Tag from '../../components/Tag.astro';
+import Icon from '../../components/Icon.astro';
+import { allArticles, latest, related as getRelated, settings as getSettings, ads as getAds, type Article } from '../../lib/db';
+import { CATEGORIES, SITE, articleUrl, fmtDate, fmtTime, readTime, titleSize } from '../../lib/site';
+
+export function getStaticPaths() {
+  return allArticles().map((a) => ({ params: { kategoria: a.category, slug: a.slug }, props: { article: a } }));
+}
+const { article } = Astro.props as { article: Article };
+const settings = getSettings();
+const ads = getAds();
+const related = getRelated(article, 4);
+const fresh = latest({ limit: 7 }).filter((a) => a.id !== article.id && !related.some((r) => r.id === a.id)).slice(0, 5);
+const cat = CATEGORIES[article.category];
+
+// reklama w treści po drugim akapicie
+const parts = article.body.split(/(?<=<\/p>)/);
+const cut = parts.length > 3 ? 2 : parts.length;
+const bodyA = parts.slice(0, cut).join('');
+const bodyB = parts.slice(cut).join('');
+
+const url = new URL(articleUrl(article), Astro.site).toString();
+const cover = article.cover;
+const coverBig = cover?.srcset?.[cover.srcset.length - 1]?.url;
+const jsonld = [
+  {
+    '@context': 'https://schema.org',
+    '@type': 'NewsArticle',
+    headline: article.title,
+    description: article.lead,
+    datePublished: article.publishedAt.toISOString(),
+    dateModified: (article.updatedAt || article.publishedAt).toISOString(),
+    image: coverBig ? [new URL(coverBig, Astro.site).toString()] : undefined,
+    author: { '@type': 'Organization', name: article.author || SITE.name },
+    publisher: { '@type': 'Organization', name: SITE.name, logo: { '@type': 'ImageObject', url: new URL('/logo.svg', Astro.site).toString() } },
+    mainEntityOfPage: url,
+    isBasedOn: article.source?.url,
+  },
+  {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: SITE.name, item: new URL('/', Astro.site).toString() },
+      { '@type': 'ListItem', position: 2, name: cat.title, item: new URL(`/${article.category}`, Astro.site).toString() },
+    ],
+  },
+];
+const preload = cover?.srcset?.length
+  ? { href: cover.srcset[cover.srcset.length - 1].url, srcset: cover.srcset.map((v) => `${v.url} ${v.w}w`).join(', '), sizes: '(max-width: 900px) 100vw, 860px' }
+  : null;
+const share = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`;
+const n = article.gallery.length;
+const credit = article.photoCredit?.replace(/^fot\.\s*/i, '');
+---
+<Base title={article.title} description={article.lead || cat.lede} image={coverBig} type="article" settings={settings} active={article.category} jsonld={jsonld} preload={preload}>
+  <article class="wrap art">
+    <div class="art-main">
+      <nav class="crumbs small" aria-label="Okruszki"><a href="/">Strona główna</a><span aria-hidden="true">/</span><a href={`/${article.category}`}>{cat.title}</a></nav>
+      <header class="art-head">
+        <Tag cat={article.category} link />
+        <h1 class={`art-t t-${titleSize(article.title)}`}>{article.title}</h1>
+        {article.lead && <p class="lead art-lead">{article.lead}</p>}
+        <div class="byline">
+          <img class="by-ava" src="/favicon.svg" width="44" height="44" alt="" />
+          <div class="by-txt">
+            <strong>{article.author}</strong>
+            <span class="soft num"><time datetime={article.publishedAt.toISOString()}>{fmtDate(article.publishedAt)}, {fmtTime(article.publishedAt)}</time> · <Icon name="clock" class="i-inline" /> {readTime(article.body)} min czytania</span>
+          </div>
+          <div class="shares">
+            <a class="sh" href={share} target="_blank" rel="noopener" aria-label="Udostępnij na Facebooku"><Icon name="facebook" /></a>
+            <button class="sh copy" type="button" data-url={url} aria-label="Kopiuj link"><Icon name="link" /><span class="copy-ok">Skopiowano</span></button>
+          </div>
+        </div>
+      </header>
+
+      {cover && (
+        <figure class="art-cover">
+          <span class="ph shutter"><Pic img={cover} sizes="(max-width: 900px) 100vw, 860px" eager /></span>
+          {credit && <figcaption class="small soft"><Icon name="camera" class="i-inline" /> Fot. {credit}</figcaption>}
+        </figure>
+      )}
+
+      <div class="body" set:html={bodyA} />
+      {bodyB && <div class="inline-ad"><AdSlot slot="article-inline" ads={ads} settings={settings} /></div>}
+      {bodyB && <div class="body" set:html={bodyB} />}
+
+      {n > 0 && (
+        <section class="gallery" aria-labelledby="h-gal">
+          <h2 class="gal-h" id="h-gal"><Icon name="camera" /> Galeria <span class="soft num">{n} {n === 1 ? 'zdjęcie' : n < 5 ? 'zdjęcia' : 'zdjęć'}</span></h2>
+          <div class="gal-grid">
+            {article.gallery.map((g, i) => (
+              <a class={`g ph rise ${i === 0 && n > 2 ? 'g-big' : ''}`} href={g.srcset[g.srcset.length - 1].url} data-full={g.srcset[g.srcset.length - 1].url} style={`--i:${i % 4}`}>
+                <Pic img={g} sizes="(max-width: 760px) 50vw, 280px" />
+              </a>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {article.source && (
+        <aside class="source">
+          <span class="src-ic"><Icon name="source" /></span>
+          <p>Źródło: <a href={article.source.url} rel="noopener" target="_blank">{article.source.name}</a></p>
+        </aside>
+      )}
+
+      <div class="art-foot">
+        <a class="btn ghost" href={share} target="_blank" rel="noopener"><Icon name="facebook" /> Udostępnij</a>
+        <a class="btn ghost" href={`mailto:${SITE.email}?subject=${encodeURIComponent('Uwagi do artykułu: ' + article.title)}`}><Icon name="mail" /> Zgłoś uwagę</a>
+      </div>
+      <div class="bottom-ad"><AdSlot slot="article-bottom" ads={ads} settings={settings} /></div>
+    </div>
+
+    <aside class="art-side">
+      <div class="side-sticky">
+        <AdSlot slot="sidebar" ads={ads} settings={settings} house />
+        {fresh.length > 0 && (
+          <div class="side-box">
+            <h2 class="side-h"><span class="pulse" aria-hidden="true"></span>Najnowsze</h2>
+            {fresh.map((a) => <Row a={a} compact />)}
+          </div>
+        )}
+      </div>
+    </aside>
+  </article>
+
+  {related.length > 0 && (
+    <section class="wrap section" aria-labelledby="h-more">
+      <div class="sec-head">
+        <h2 class="head" id="h-more">Więcej: {cat.title}</h2>
+        <a class="more-link" href={`/${article.category}`}>Cały dział <Icon name="arrow" /></a>
+      </div>
+      <div class="more-grid">{related.map((a, i) => <Card a={a} i={i} />)}</div>
+    </section>
+  )}
+
+  <dialog class="lb" aria-label="Zdjęcie">
+    <img alt="" />
+    <button type="button" class="lb-x btn white">Zamknij</button>
+  </dialog>
+  <script is:inline>
+    (function () {
+      var c = document.querySelector('.copy');
+      if (c) c.addEventListener('click', function () {
+        navigator.clipboard && navigator.clipboard.writeText(c.dataset.url).then(function () { c.classList.add('ok'); setTimeout(function () { c.classList.remove('ok'); }, 1800); });
+      });
+      var d = document.querySelector('.lb');
+      if (!d || !d.showModal) return;
+      var img = d.querySelector('img');
+      document.querySelectorAll('[data-full]').forEach(function (a) {
+        a.addEventListener('click', function (e) { e.preventDefault(); img.src = a.dataset.full; d.showModal(); });
+      });
+      d.addEventListener('click', function (e) { if (e.target === d || e.target.classList.contains('lb-x')) d.close(); });
+    })();
+  </script>
+</Base>
+
+<style>
+  .art { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 56px; align-items: start; padding-top: 24px; }
+  .art-main { min-width: 0; max-width: 820px; }
+  .crumbs { display: flex; gap: 8px; color: var(--ink-soft); margin-bottom: 20px; }
+  .crumbs a:hover { color: var(--red-ink); }
+  .art-head { display: grid; gap: 18px; justify-items: start; }
+  .art-t { font-size: clamp(1.9rem, 1rem + 2.6vw, 3.25rem); }
+  .art-t.t-s { font-size: clamp(1.6rem, 1rem + 2vw, 2.6rem); }
+  .art-lead { color: var(--ink-2); font-weight: 500; }
+  .byline { display: flex; align-items: center; gap: 12px; width: 100%; padding: 16px 0; border-block: 1px solid var(--line); margin-top: 4px; }
+  .by-ava { width: 44px; height: 44px; border-radius: 12px; }
+  .by-txt { display: grid; gap: 2px; font-size: 15px; flex: 1; min-width: 0; }
+  .by-txt .soft { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+  :global(.i-inline) { width: 15px; height: 15px; display: inline-block; vertical-align: -2px; }
+  .shares { display: flex; gap: 8px; margin-left: auto; }
+  .sh { position: relative; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 999px; background: var(--paper); border: 0; cursor: pointer; transition: background-color 0.2s, color 0.2s, transform 0.2s var(--ease); }
+  .sh:hover { background: var(--ink); color: #fff; transform: translateY(-2px); }
+  .copy-ok { position: absolute; bottom: calc(100% + 6px); right: 0; background: var(--ink); color: #fff; font-size: 13px; padding: 4px 8px; border-radius: 6px; white-space: nowrap; opacity: 0; transform: translateY(4px); transition: opacity 0.2s, transform 0.2s; pointer-events: none; }
+  .copy.ok .copy-ok { opacity: 1; transform: none; }
+  .art-cover { margin: 28px 0 32px; }
+  .art-cover .ph { aspect-ratio: 16 / 9; border-radius: var(--r-lg); }
+  .art-cover figcaption { margin-top: 10px; display: flex; align-items: center; gap: 6px; }
+  .body { font-size: clamp(1.0625rem, 1rem + 0.25vw, 1.1875rem); line-height: 1.72; max-width: 68ch; }
+  .body :global(p) { margin-bottom: 1.15em; }
+  .body :global(h2), .body :global(h3) { font-size: 1.45rem; font-weight: 800; line-height: 1.25; letter-spacing: -0.01em; margin: 1.6em 0 0.6em; }
+  .body :global(a) { color: var(--red-ink); text-decoration: underline; text-decoration-thickness: 1.5px; text-underline-offset: 3px; }
+  .body :global(a:hover) { color: var(--ink); }
+  .body :global(ul) { list-style: disc; padding-left: 1.3em; margin-bottom: 1.15em; }
+  .body :global(ol) { list-style: decimal; padding-left: 1.4em; margin-bottom: 1.15em; }
+  .body :global(li) { margin-bottom: 0.4em; }
+  .body :global(blockquote) { position: relative; font-size: 1.3rem; line-height: 1.45; font-weight: 600; padding: 22px 26px 22px 30px; margin: 1.5em 0; background: var(--paper); border-radius: var(--r-md); }
+  .body :global(blockquote)::before { content: ''; position: absolute; left: 0; top: 18px; bottom: 18px; width: 4px; border-radius: 4px; background: var(--red); }
+  .inline-ad { margin: 12px 0 36px; max-width: 750px; }
+  .gallery { margin-top: 40px; }
+  .gal-h { display: flex; align-items: center; gap: 10px; font-size: 22px; font-weight: 800; margin-bottom: 16px; }
+  .gal-h .soft { font-size: 15px; font-weight: 500; }
+  .gal-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .g { aspect-ratio: 4 / 3; cursor: zoom-in; border-radius: var(--r-sm); }
+  .g-big { grid-column: span 2; grid-row: span 2; }
+  .g:hover :global(img) { transform: scale(1.05); }
+  .source { display: flex; align-items: center; gap: 14px; margin-top: 40px; padding: 18px 22px; background: var(--paper); border-radius: var(--r-md); font-weight: 600; }
+  .src-ic { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 10px; background: #fff; color: var(--red-ink); flex: none; }
+  .source a { color: var(--red-ink); text-decoration: underline; text-underline-offset: 3px; }
+  .art-foot { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 28px; }
+  .bottom-ad { margin-top: 40px; }
+  .side-sticky { position: sticky; top: 100px; display: grid; gap: 32px; }
+  .side-box { background: var(--paper); border-radius: var(--r-lg); padding: 8px 20px 4px; }
+  .side-h { display: flex; align-items: center; gap: 10px; font-size: 18px; font-weight: 800; padding: 14px 0 4px; }
+  .pulse { width: 9px; height: 9px; border-radius: 50%; background: var(--red); }
+  .side-box :global(.row:last-child) { border-bottom: 0; }
+  .more-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--gap); }
+  .lb { padding: 0; border: 0; max-width: 96vw; max-height: 96vh; background: transparent; }
+  .lb::backdrop { background: rgb(10 11 25 / 0.92); }
+  .lb img { max-width: 96vw; max-height: 86vh; object-fit: contain; border-radius: var(--r-md); }
+  .lb-x { position: fixed; top: 16px; right: 16px; }
+  @media (max-width: 1100px) {
+    .art { grid-template-columns: 1fr; }
+    .art-side { display: none; }
+    .art-main { margin-inline: auto; }
+    .more-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @media (max-width: 760px) {
+    .art { padding-top: 16px; }
+    .by-txt { font-size: 14px; }
+    .by-ava { width: 40px; height: 40px; }
+    .sh { width: 40px; height: 40px; }
+    .art-cover { margin-inline: calc(var(--m) * -1); }
+    .art-cover .ph { border-radius: 0; }
+    .art-cover figcaption { padding-inline: var(--m); }
+    .gal-grid { grid-template-columns: 1fr 1fr; }
+    .more-grid { gap: 24px 14px; }
+    .more-grid :global(.card-t) { font-size: 16px; }
+  }
+</style>

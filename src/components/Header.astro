@@ -1,0 +1,111 @@
+---
+import Icon from './Icon.astro';
+import { CATEGORIES, CATEGORY_KEYS, SITE, articleUrl, fmtDay, fmtWhen } from '../lib/site';
+import { latest } from '../lib/db';
+interface Props { active?: string }
+const { active } = Astro.props;
+const ticker = latest({ limit: 8 });
+const mail = `mailto:${SITE.email}?subject=${encodeURIComponent('Temat dla Częstokocham')}&body=${encodeURIComponent('Cześć! Mam temat z Częstochowy:\n\nCo się stało:\nGdzie:\nKiedy:\nKontakt do mnie:\n')}`;
+---
+<div class="bar">
+  <div class="wrap bar-in">
+    <span class="bar-day">{fmtDay(new Date())}</span>
+    {ticker.length > 0 && (
+      <div class="tick" aria-label="Najnowsze wiadomości">
+        <span class="tick-l"><Icon name="bolt" /> Najnowsze</span>
+        <div class="tick-win">
+          <ul class="tick-track">
+            {[...ticker, ...ticker].map((a, i) => (
+              <li aria-hidden={i >= ticker.length ? 'true' : undefined}><a href={articleUrl(a)} tabindex={i >= ticker.length ? -1 : undefined}><span class="num">{fmtWhen(a.publishedAt)}</span>{a.title}</a></li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    )}
+    <span class="bar-soc">
+      <a href={SITE.facebook} target="_blank" rel="noopener" aria-label="Facebook"><Icon name="facebook" /></a>
+      <a href={SITE.instagram} target="_blank" rel="noopener" aria-label="Instagram"><Icon name="instagram" /></a>
+    </span>
+  </div>
+</div>
+<header class="top">
+  <div class="wrap top-in">
+    <a class="logo" href="/" aria-label="Częstokocham – strona główna">
+      <img src="/logo.svg" width="100" height="62" alt="Częstokocham" />
+    </a>
+    <nav class="nav" aria-label="Działy">
+      <a href="/" aria-current={active === 'home' ? 'page' : undefined}>Najnowsze</a>
+      {CATEGORY_KEYS.map((k) => (
+        <a href={`/${k}`} aria-current={active === k ? 'page' : undefined} style={`--c:${CATEGORIES[k].color}`}>{CATEGORIES[k].name}</a>
+      ))}
+    </nav>
+    <div class="acts">
+      <a class="ico" href="/szukaj" aria-label="Szukaj" aria-current={active === 'szukaj' ? 'page' : undefined}><Icon name="search" /></a>
+      <a class="btn red tip" href={mail}><Icon name="mail" /> Zgłoś temat</a>
+      <details class="menu">
+        <summary aria-label="Menu"><Icon name="menu" class="i-open" /><Icon name="close" class="i-close" /></summary>
+        <div class="menu-panel">
+          <a href="/">Najnowsze</a>
+          {CATEGORY_KEYS.map((k) => (<a href={`/${k}`} style={`--c:${CATEGORIES[k].color}`}><span class="dot"></span>{CATEGORIES[k].title}</a>))}
+          <a href="/szukaj">Szukaj</a>
+          <a class="btn red" href={mail}><Icon name="mail" /> Zgłoś temat</a>
+          <a href="/reklama" class="menu-s">Reklama na portalu</a>
+        </div>
+      </details>
+    </div>
+  </div>
+</header>
+<style>
+  .bar { background: var(--navy); color: #fff; font-size: 14px; position: relative; z-index: calc(var(--z-header) + 1); }
+  .bar-in { display: flex; align-items: center; gap: 24px; height: 40px; }
+  .bar-day { color: var(--on-navy-soft); white-space: nowrap; text-transform: capitalize; }
+  .tick { display: flex; align-items: center; gap: 12px; min-width: 0; flex: 1; }
+  .tick-l { display: inline-flex; align-items: center; gap: 6px; background: var(--red); padding: 4px 10px 4px 8px; border-radius: 6px; font-weight: 700; white-space: nowrap; }
+  .tick-l :global(svg) { width: 14px; height: 14px; fill: currentColor; stroke: none; }
+  .tick-win { overflow: hidden; flex: 1; mask-image: linear-gradient(90deg, transparent, #000 24px, #000 calc(100% - 48px), transparent); }
+  .tick-track { display: flex; gap: 40px; width: max-content; animation: tick 70s linear infinite; }
+  .tick:hover .tick-track, .tick:focus-within .tick-track { animation-play-state: paused; }
+  .tick-track a { white-space: nowrap; display: inline-flex; gap: 10px; transition: color 0.2s; }
+  .tick-track a span { color: #ff8a8e; font-weight: 600; }
+  .tick-track a:hover { color: #ffd0d2; }
+  @keyframes tick { to { transform: translateX(-50%); } }
+  .bar-soc { display: flex; gap: 10px; margin-left: auto; }
+  .bar-soc a { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 8px; color: var(--on-navy-soft); transition: background-color 0.2s, color 0.2s; }
+  .bar-soc a:hover { background: var(--navy-2); color: #fff; }
+  .bar-soc :global(svg) { width: 18px; height: 18px; }
+
+  .top { position: sticky; top: 0; z-index: var(--z-header); background: rgb(255 255 255 / 0.92); backdrop-filter: saturate(1.6) blur(14px); -webkit-backdrop-filter: saturate(1.6) blur(14px); border-bottom: 1px solid var(--line); }
+  .top-in { display: flex; align-items: center; gap: 32px; height: 76px; }
+  .logo { flex: none; transition: transform 0.3s var(--ease); }
+  .logo:hover { transform: rotate(-2deg) scale(1.04); }
+  .logo img { height: 58px; width: auto; }
+  .nav { display: flex; gap: 4px; }
+  .nav a { position: relative; padding: 10px 14px; border-radius: 10px; font-weight: 650; font-size: 16.5px; transition: background-color 0.2s, color 0.2s; }
+  .nav a:hover { background: var(--tone); }
+  .nav a[aria-current] { color: color-mix(in srgb, var(--c, var(--red)) 74%, #000); background: color-mix(in srgb, var(--c, var(--red)) 9%, #fff); }
+  .acts { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+  .ico { display: grid; place-items: center; width: 46px; height: 46px; border-radius: 999px; background: var(--tone); transition: background-color 0.2s, transform 0.2s var(--ease); }
+  .ico:hover { background: var(--tone-2); transform: scale(1.05); }
+  .ico[aria-current] { background: var(--ink); color: #fff; }
+  .menu { display: none; position: relative; }
+  .menu summary { list-style: none; cursor: pointer; display: grid; place-items: center; width: 46px; height: 46px; border-radius: 999px; background: var(--ink); color: #fff; }
+  .menu summary::-webkit-details-marker { display: none; }
+  .menu :global(.i-close), .menu[open] :global(.i-open) { display: none; }
+  .menu[open] :global(.i-close) { display: block; }
+  .menu-panel { position: absolute; right: 0; top: 56px; width: min(calc(100vw - 24px), 400px); background: #fff; border-radius: var(--r-lg); padding: 12px; box-shadow: 0 30px 60px -20px rgb(22 24 48 / 0.45); display: flex; flex-direction: column; animation: drop 0.3s var(--ease); }
+  @keyframes drop { from { opacity: 0; transform: translateY(-8px); } }
+  .menu-panel a:not(.btn) { display: flex; align-items: center; gap: 12px; padding: 14px 12px; font-size: 20px; font-weight: 700; border-radius: 12px; }
+  .menu-panel a:not(.btn):hover { background: var(--tone); }
+  .menu-panel .dot { width: 10px; height: 10px; border-radius: 3px; background: var(--c); }
+  .menu-panel .btn { margin: 8px 0 4px; min-height: 52px; }
+  .menu-panel .menu-s { font-size: 16px !important; font-weight: 600 !important; color: var(--ink-soft); }
+  @media (max-width: 1100px) { .bar-day { display: none; } .nav a { padding: 10px 10px; } .top-in { gap: 20px; } }
+  @media (max-width: 920px) {
+    .nav, .tip { display: none; }
+    .menu { display: block; }
+    .top-in { height: 64px; }
+    .logo img { height: 48px; }
+    .bar-soc { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) { .tick-track { animation: none; } }
+</style>
