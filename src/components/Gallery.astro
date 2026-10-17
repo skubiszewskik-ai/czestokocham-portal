@@ -102,7 +102,7 @@ const data = images.map((g) => ({ src: big(g), w: g.w, h: g.h, t: small(g) }));
   .g-zoom { position: absolute; right: 10px; bottom: 10px; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 999px; background: rgb(255 255 255 / 0.92); color: var(--ink); opacity: 0; transform: scale(0.8); transition: opacity 0.2s, transform 0.25s var(--ease); }
   .g:hover .g-zoom { opacity: 1; transform: none; }
 
-  .lb { width: 100vw; height: 100dvh; max-width: none; max-height: none; margin: 0; padding: 0; border: 0; background: rgb(9 10 22 / 0.97); color: #fff; }
+  .lb { width: 100vw; height: 100dvh; max-width: none; max-height: none; margin: 0; padding: 0; border: 0; background: #090a16; color: #fff; }
   .lb[open] { display: grid; grid-template-rows: auto 1fr auto; animation: lbin 0.3s var(--ease); }
   @keyframes lbin { from { opacity: 0; } }
   .lb::backdrop { background: transparent; }
@@ -113,7 +113,7 @@ const data = images.map((g) => ({ src: big(g), w: g.w, h: g.h, t: small(g) }));
   .lb-btn { width: 46px; height: 46px; }
   .lb-btn:hover, .lb-nav:hover { background: var(--red); }
   .lb-stage { position: relative; display: grid; place-items: center; min-height: 0; padding: 0 80px; touch-action: pan-y; }
-  .lb-img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 10px; opacity: 0; transform: scale(0.98); transition: opacity 0.3s, transform 0.4s var(--ease); user-select: none; -webkit-user-drag: none; }
+  .lb-img { max-width: 100%; max-height: calc(100dvh - 200px); object-fit: contain; border-radius: 10px; opacity: 0; transform: scale(0.98); transition: opacity 0.3s, transform 0.4s var(--ease); user-select: none; -webkit-user-drag: none; }
   .lb-img:global(.in) { opacity: 1; transform: none; }
   .lb-nav { position: absolute; top: 50%; width: 56px; height: 56px; margin-top: -28px; }
   .lb-nav :global(svg) { width: 24px; height: 24px; }
