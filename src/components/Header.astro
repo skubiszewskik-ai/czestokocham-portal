@@ -22,9 +22,6 @@ const mail = `mailto:${SITE.email}?subject=${encodeURIComponent('Temat dla Częs
         </div>
       </div>
     )}
-    <span class="bar-soc">
-      <a href={SITE.facebook} target="_blank" rel="noopener" aria-label="Facebook"><Icon name="facebook" /></a>
-    </span>
   </div>
 </div>
 <header class="top">
@@ -68,8 +65,8 @@ const mail = `mailto:${SITE.email}?subject=${encodeURIComponent('Temat dla Częs
   .tick-track a span { color: #ff8a8e; font-weight: 600; }
   .tick-track a:hover { color: #ffd0d2; }
   @keyframes tick { to { transform: translateX(-50%); } }
-  .bar-soc { display: flex; gap: 10px; margin-left: auto; }
-  .bar-soc a { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 8px; color: var(--on-navy-soft); transition: background-color 0.2s, color 0.2s; }
+  .bar-soc { display: flex; gap: 10px; margin-left: auto; padding-left: 16px; }
+  .bar-soc a { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 8px; color: var(--on-navy-soft); transition: background-color 0.2s, color 0.2s; }
   .bar-soc a:hover { background: var(--navy-2); color: #fff; }
   .bar-soc :global(svg) { width: 18px; height: 18px; }
 

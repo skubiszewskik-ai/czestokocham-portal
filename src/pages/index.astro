@@ -45,7 +45,7 @@ const jsonld = {
   email: SITE.email,
 };
 const li = lead?.cover?.srcset?.length ? lead.cover : null;
-const preload = li ? { href: li.srcset[li.srcset.length - 1].url, srcset: li.srcset.map((v) => `${v.url} ${v.w}w`).join(', '), sizes: '(max-width: 900px) 100vw, 860px' } : null;
+const preload = li ? { href: li.srcset[Math.min(1, li.srcset.length - 1)].url, srcset: li.srcset.map((v) => `${v.url} ${v.w}w`).join(', '), sizes: '(max-width: 900px) 100vw, 860px' } : null;
 const mail = `mailto:${SITE.email}?subject=${encodeURIComponent('Temat dla Częstokocham')}`;
 ---
 <Base settings={settings} jsonld={jsonld} preload={preload} active="home">
@@ -54,7 +54,7 @@ const mail = `mailto:${SITE.email}?subject=${encodeURIComponent('Temat dla Częs
   {lead && (
     <section class="wrap bento" aria-label="Najważniejsze">
       <a class="lead-card b-lead" href={articleUrl(lead)}>
-        <span class="lead-pic shutter"><Pic img={lead.cover} sizes="(max-width: 900px) 100vw, 760px" eager alt="" /></span>
+        <span class="lead-pic"><Pic img={lead.cover} sizes="(max-width: 900px) 100vw, 760px" eager alt="" /></span>
         <span class="lead-body">
           <span class="card-meta"><Tag cat={lead.category} dark /><When d={lead.publishedAt} /></span>
           <h2 class="lead-t">{lead.title}</h2>
@@ -64,7 +64,7 @@ const mail = `mailto:${SITE.email}?subject=${encodeURIComponent('Temat dla Częs
       </a>
       {side2.map((a, i) => (
         <a class={`lead-card b-side b-side${i}`} href={articleUrl(a)}>
-          <span class="lead-pic"><Pic img={a.cover} sizes="(max-width: 900px) 50vw, 380px" eagerNoPriority alt="" /></span>
+          <span class="lead-pic"><Pic img={a.cover} sizes="(max-width: 900px) 50vw, 380px" alt="" /></span>
           <span class="lead-body">
             <span class="card-meta"><Tag cat={a.category} dark /><When d={a.publishedAt} /></span>
             <h2 class="side-t">{a.title}</h2>
@@ -97,7 +97,7 @@ const mail = `mailto:${SITE.email}?subject=${encodeURIComponent('Temat dla Częs
 
   {top4.length > 0 && (
     <section class="wrap grid4" aria-label="Wyróżnione">
-      {top4.map((a, i) => <Card a={a} i={i} eager={i < 2} />)}
+      {top4.map((a, i) => <Card a={a} i={i} />)}
     </section>
   )}
 
