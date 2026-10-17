@@ -6,6 +6,7 @@ import Card from '../../components/Card.astro';
 import Row from '../../components/Row.astro';
 import Tag from '../../components/Tag.astro';
 import Icon from '../../components/Icon.astro';
+import Gallery from '../../components/Gallery.astro';
 import { allArticles, latest, related as getRelated, settings as getSettings, ads as getAds, type Article } from '../../lib/db';
 import { CATEGORIES, SITE, articleUrl, fmtDate, fmtTime, readTime, titleSize } from '../../lib/site';
 
@@ -81,7 +82,7 @@ const credit = article.photoCredit?.replace(/^fot\.\s*/i, '');
 
       {cover && (
         <figure class="art-cover">
-          <span class="ph shutter"><Pic img={cover} sizes="(max-width: 900px) 100vw, 860px" eager /></span>
+          <button class="ph shutter cover-btn" type="button" data-cover-open aria-label="Powiększ zdjęcie"><Pic img={cover} sizes="(max-width: 900px) 100vw, 860px" eager />{n > 0 && <span class="cover-n num"><Icon name="camera" /> {n + 1} zdjęć</span>}</button>
           {credit && <figcaption class="small soft"><Icon name="camera" class="i-inline" /> Fot. {credit}</figcaption>}
         </figure>
       )}
@@ -90,18 +91,7 @@ const credit = article.photoCredit?.replace(/^fot\.\s*/i, '');
       {bodyB && <div class="inline-ad"><AdSlot slot="article-inline" ads={ads} settings={settings} /></div>}
       {bodyB && <div class="body" set:html={bodyB} />}
 
-      {n > 0 && (
-        <section class="gallery" aria-labelledby="h-gal">
-          <h2 class="gal-h" id="h-gal"><Icon name="camera" /> Galeria <span class="soft num">{n} {n === 1 ? 'zdjęcie' : n < 5 ? 'zdjęcia' : 'zdjęć'}</span></h2>
-          <div class="gal-grid">
-            {article.gallery.map((g, i) => (
-              <a class={`g ph rise ${i === 0 && n > 2 ? 'g-big' : ''}`} href={g.srcset[g.srcset.length - 1].url} data-full={g.srcset[g.srcset.length - 1].url} style={`--i:${i % 4}`}>
-                <Pic img={g} sizes="(max-width: 760px) 50vw, 280px" />
-              </a>
-            ))}
-          </div>
-        </section>
-      )}
+      {cover && <Gallery images={[cover, ...article.gallery]} credit={credit} title={article.title} />}
 
       {article.source && (
         <aside class="source">
@@ -140,23 +130,12 @@ const credit = article.photoCredit?.replace(/^fot\.\s*/i, '');
     </section>
   )}
 
-  <dialog class="lb" aria-label="Zdjęcie">
-    <img alt="" />
-    <button type="button" class="lb-x btn white">Zamknij</button>
-  </dialog>
   <script is:inline>
     (function () {
       var c = document.querySelector('.copy');
       if (c) c.addEventListener('click', function () {
         navigator.clipboard && navigator.clipboard.writeText(c.dataset.url).then(function () { c.classList.add('ok'); setTimeout(function () { c.classList.remove('ok'); }, 1800); });
       });
-      var d = document.querySelector('.lb');
-      if (!d || !d.showModal) return;
-      var img = d.querySelector('img');
-      document.querySelectorAll('[data-full]').forEach(function (a) {
-        a.addEventListener('click', function (e) { e.preventDefault(); img.src = a.dataset.full; d.showModal(); });
-      });
-      d.addEventListener('click', function (e) { if (e.target === d || e.target.classList.contains('lb-x')) d.close(); });
     })();
   </script>
 </Base>
@@ -182,6 +161,9 @@ const credit = article.photoCredit?.replace(/^fot\.\s*/i, '');
   .copy.ok .copy-ok { opacity: 1; transform: none; }
   .art-cover { margin: 28px 0 32px; }
   .art-cover .ph { aspect-ratio: 16 / 9; border-radius: var(--r-lg); }
+  .cover-btn { position: relative; width: 100%; border: 0; padding: 0; cursor: zoom-in; }
+  .cover-n { position: absolute; left: 14px; bottom: 14px; display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; border-radius: 999px; background: rgb(17 19 38 / 0.72); color: #fff; font-size: 14px; font-weight: 650; backdrop-filter: blur(6px); }
+  .cover-n :global(svg) { width: 16px; height: 16px; }
   .art-cover figcaption { margin-top: 10px; display: flex; align-items: center; gap: 6px; }
   .body { font-size: clamp(1.0625rem, 1rem + 0.25vw, 1.1875rem); line-height: 1.72; max-width: 68ch; }
   .body :global(p) { margin-bottom: 1.15em; }
@@ -194,13 +176,6 @@ const credit = article.photoCredit?.replace(/^fot\.\s*/i, '');
   .body :global(blockquote) { position: relative; font-size: 1.3rem; line-height: 1.45; font-weight: 600; padding: 22px 26px 22px 30px; margin: 1.5em 0; background: var(--paper); border-radius: var(--r-md); }
   .body :global(blockquote)::before { content: ''; position: absolute; left: 0; top: 18px; bottom: 18px; width: 4px; border-radius: 4px; background: var(--red); }
   .inline-ad { margin: 12px 0 36px; max-width: 750px; }
-  .gallery { margin-top: 40px; }
-  .gal-h { display: flex; align-items: center; gap: 10px; font-size: 22px; font-weight: 800; margin-bottom: 16px; }
-  .gal-h .soft { font-size: 15px; font-weight: 500; }
-  .gal-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-  .g { aspect-ratio: 4 / 3; cursor: zoom-in; border-radius: var(--r-sm); }
-  .g-big { grid-column: span 2; grid-row: span 2; }
-  .g:hover :global(img) { transform: scale(1.05); }
   .source { display: flex; align-items: center; gap: 14px; margin-top: 40px; padding: 18px 22px; background: var(--paper); border-radius: var(--r-md); font-weight: 600; }
   .src-ic { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 10px; background: #fff; color: var(--red-ink); flex: none; }
   .source a { color: var(--red-ink); text-decoration: underline; text-underline-offset: 3px; }
@@ -212,10 +187,6 @@ const credit = article.photoCredit?.replace(/^fot\.\s*/i, '');
   .pulse { width: 9px; height: 9px; border-radius: 50%; background: var(--red); }
   .side-box :global(.row:last-child) { border-bottom: 0; }
   .more-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--gap); }
-  .lb { padding: 0; border: 0; max-width: 96vw; max-height: 96vh; background: transparent; }
-  .lb::backdrop { background: rgb(10 11 25 / 0.92); }
-  .lb img { max-width: 96vw; max-height: 86vh; object-fit: contain; border-radius: var(--r-md); }
-  .lb-x { position: fixed; top: 16px; right: 16px; }
   @media (max-width: 1100px) {
     .art { grid-template-columns: 1fr; }
     .art-side { display: none; }
@@ -230,7 +201,6 @@ const credit = article.photoCredit?.replace(/^fot\.\s*/i, '');
     .art-cover { margin-inline: calc(var(--m) * -1); }
     .art-cover .ph { border-radius: 0; }
     .art-cover figcaption { padding-inline: var(--m); }
-    .gal-grid { grid-template-columns: 1fr 1fr; }
     .more-grid { gap: 24px 14px; }
     .more-grid :global(.card-t) { font-size: 16px; }
   }

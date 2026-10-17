@@ -57,6 +57,7 @@ const adsense = settings.adsenseEnabled && settings.adsenseClient ? settings.ads
       <slot />
     </main>
     <Footer />
+    <button class="to-top" type="button" aria-label="Przewiń do góry" data-top><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
     <script is:inline define:vars={{ adsense, ga: settings.analyticsId || '' }}>
       (function () {
         // wejścia sekcji
@@ -67,6 +68,18 @@ const adsense = settings.adsenseEnabled && settings.adsenseClient ? settings.ads
           }, { rootMargin: '0px 0px -8% 0px' });
           els.forEach(function (el) { io.observe(el); });
         } else els.forEach(function (el) { el.classList.add('in'); });
+        // cień nagłówka i przycisk „do góry” przy przewijaniu
+        var top = document.querySelector('[data-top]'), root = document.documentElement, ticking = false;
+        function onScroll() {
+          ticking = false;
+          var y = scrollY;
+          root.classList.toggle('scrolled', y > 60);
+          if (top) top.classList.toggle('on', y > 900);
+          var bar = document.querySelector('[data-progress]');
+          if (bar) { var h = document.querySelector('[data-read]'); if (h) { var r = h.getBoundingClientRect(); bar.style.transform = 'scaleX(' + Math.min(1, Math.max(0, -r.top / (r.height - innerHeight))) + ')'; } }
+        }
+        addEventListener('scroll', function () { if (!ticking) { ticking = true; requestAnimationFrame(onScroll); } }, { passive: true });
+        if (top) top.addEventListener('click', function () { scrollTo({ top: 0, behavior: 'smooth' }); });
         // „2 godz. temu” – strona jest statyczna, więc czas względny liczymy w przeglądarce
         var rtf = window.Intl && Intl.RelativeTimeFormat ? new Intl.RelativeTimeFormat('pl', { numeric: 'auto' }) : null;
         document.querySelectorAll('time[data-ago]').forEach(function (t) {

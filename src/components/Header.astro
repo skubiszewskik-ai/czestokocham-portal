@@ -24,7 +24,6 @@ const mail = `mailto:${SITE.email}?subject=${encodeURIComponent('Temat dla Częs
     )}
     <span class="bar-soc">
       <a href={SITE.facebook} target="_blank" rel="noopener" aria-label="Facebook"><Icon name="facebook" /></a>
-      <a href={SITE.instagram} target="_blank" rel="noopener" aria-label="Instagram"><Icon name="instagram" /></a>
     </span>
   </div>
 </div>
@@ -74,7 +73,8 @@ const mail = `mailto:${SITE.email}?subject=${encodeURIComponent('Temat dla Częs
   .bar-soc a:hover { background: var(--navy-2); color: #fff; }
   .bar-soc :global(svg) { width: 18px; height: 18px; }
 
-  .top { position: sticky; top: 0; z-index: var(--z-header); background: rgb(255 255 255 / 0.92); backdrop-filter: saturate(1.6) blur(14px); -webkit-backdrop-filter: saturate(1.6) blur(14px); border-bottom: 1px solid var(--line); }
+  .top { position: sticky; top: 0; z-index: var(--z-header); background: #fff; border-bottom: 1px solid var(--line); transition: box-shadow 0.3s, border-color 0.3s; }
+  :global(.scrolled) .top { box-shadow: 0 10px 30px -18px rgb(22 24 48 / 0.35); border-color: transparent; }
   .top-in { display: flex; align-items: center; gap: 32px; height: 76px; }
   .logo { flex: none; transition: transform 0.3s var(--ease); }
   .logo:hover { transform: rotate(-2deg) scale(1.04); }

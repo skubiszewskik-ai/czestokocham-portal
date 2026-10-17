@@ -7,6 +7,7 @@ import Row from '../components/Row.astro';
 import Tag from '../components/Tag.astro';
 import When from '../components/When.astro';
 import Icon from '../components/Icon.astro';
+import Carousel from '../components/Carousel.astro';
 import { latest, featured, settings as getSettings, ads as getAds, type Article } from '../lib/db';
 import { CATEGORIES, CATEGORY_KEYS, SITE, articleUrl, fmtWhen } from '../lib/site';
 
@@ -16,8 +17,11 @@ const ads = getAds();
 const withPic = (a: Article) => !!a.cover;
 const lead = featured() || all.find(withPic) || all[0];
 const rest = all.filter((a) => a.id !== lead?.id);
-const top4 = rest.filter(withPic).slice(0, 4);
-const used = new Set([lead?.id, ...top4.map((a) => a.id)]);
+const side2 = rest.filter(withPic).slice(0, 2);
+const top4 = rest.filter((a) => withPic(a) && !side2.includes(a)).slice(0, 4);
+const used = new Set([lead?.id, ...side2.map((a) => a.id), ...top4.map((a) => a.id)]);
+const miasto = latest({ category: 'miasto', limit: 20 }).filter((a) => !used.has(a.id) && a.cover).slice(0, 10);
+const TOPICS = [['Raków', 'sport'], ['Włókniarz', 'sport'], ['Jasna Góra', ''], ['Aleja NMP', ''], ['Drogi i remonty', 'drogi'], ['Komunikacja MPK', 'MPK'], ['Szkoły', 'szkoła'], ['Kultura', 'koncert'], ['Inwestycje', 'inwestycja'], ['Budżet obywatelski', 'budżet obywatelski']];
 const feed = all.filter((a) => !used.has(a.id)).slice(0, 36);
 const ticker = all.slice(0, 7);
 const sport = latest({ category: 'sport', limit: 4 });
@@ -37,7 +41,7 @@ const jsonld = {
   name: SITE.name,
   url: Astro.site?.toString(),
   logo: new URL('/logo.svg', Astro.site).toString(),
-  sameAs: [SITE.facebook, SITE.instagram],
+  sameAs: [SITE.facebook],
   email: SITE.email,
 };
 const li = lead?.cover?.srcset?.length ? lead.cover : null;
@@ -48,9 +52,9 @@ const mail = `mailto:${SITE.email}?subject=${encodeURIComponent('Temat dla Częs
   <h1 class="sr-only">Częstokocham – wiadomości z Częstochowy i powiatu</h1>
 
   {lead && (
-    <section class="wrap hero" aria-label="Najważniejsze">
-      <a class="lead-card" href={articleUrl(lead)}>
-        <span class="lead-pic shutter"><Pic img={lead.cover} sizes="(max-width: 900px) 100vw, 860px" eager alt="" /></span>
+    <section class="wrap bento" aria-label="Najważniejsze">
+      <a class="lead-card b-lead" href={articleUrl(lead)}>
+        <span class="lead-pic shutter"><Pic img={lead.cover} sizes="(max-width: 900px) 100vw, 760px" eager alt="" /></span>
         <span class="lead-body">
           <span class="card-meta"><Tag cat={lead.category} dark /><When d={lead.publishedAt} /></span>
           <h2 class="lead-t">{lead.title}</h2>
@@ -58,6 +62,15 @@ const mail = `mailto:${SITE.email}?subject=${encodeURIComponent('Temat dla Częs
           <span class="lead-more">Czytaj <Icon name="arrow" /></span>
         </span>
       </a>
+      {side2.map((a, i) => (
+        <a class={`lead-card b-side b-side${i}`} href={articleUrl(a)}>
+          <span class="lead-pic"><Pic img={a.cover} sizes="(max-width: 900px) 50vw, 380px" eagerNoPriority alt="" /></span>
+          <span class="lead-body">
+            <span class="card-meta"><Tag cat={a.category} dark /><When d={a.publishedAt} /></span>
+            <h2 class="side-t">{a.title}</h2>
+          </span>
+        </a>
+      ))}
       <aside class="live" aria-labelledby="h-live">
         <div class="live-h"><span class="pulse" aria-hidden="true"></span><h2 id="h-live">Na bieżąco</h2></div>
         <ol class="live-list">
@@ -75,6 +88,13 @@ const mail = `mailto:${SITE.email}?subject=${encodeURIComponent('Temat dla Częs
     </section>
   )}
 
+  <nav class="wrap topics" aria-label="Popularne tematy">
+    <span class="topics-l"><Icon name="bolt" /> Tematy</span>
+    <ul>
+      {TOPICS.map(([name, q]) => <li><a href={`/szukaj?q=${encodeURIComponent(q || name)}`}>{name}</a></li>)}
+    </ul>
+  </nav>
+
   {top4.length > 0 && (
     <section class="wrap grid4" aria-label="Wyróżnione">
       {top4.map((a, i) => <Card a={a} i={i} eager={i < 2} />)}
@@ -83,9 +103,17 @@ const mail = `mailto:${SITE.email}?subject=${encodeURIComponent('Temat dla Częs
 
   <div class="wrap section"><AdSlot slot="billboard" ads={ads} settings={settings} house /></div>
 
+  {miasto.length > 3 && (
+    <div class="wrap section">
+      <Carousel title="Z Częstochowy" href="/miasto" linkText="Wszystkie" id="h-miasto">
+        {miasto.map((a, i) => <Card a={a} i={i % 4} sizes="(max-width: 760px) 74vw, 320px" />)}
+      </Carousel>
+    </div>
+  )}
+
   <section class="wrap section" id="wiadomosci" aria-labelledby="h-feed">
     <div class="feed-head rise">
-      <h2 class="head" id="h-feed">Wszystkie wiadomości</h2>
+      <h2 class="head accent" id="h-feed">Wszystkie wiadomości</h2>
       <div class="seg" role="tablist" aria-label="Filtruj według działu" data-seg>
         {tabs.map((t) => (
           <a href={t.key === 'all' ? '#wiadomosci' : `/${t.key}`} role="tab" data-filter={t.key} aria-selected={t.key === 'all' ? 'true' : 'false'} style={t.key !== 'all' ? `--c:${(CATEGORIES as any)[t.key].color}` : undefined}>
@@ -144,7 +172,7 @@ const mail = `mailto:${SITE.email}?subject=${encodeURIComponent('Temat dla Częs
   <section class="wrap section" aria-labelledby="h-powiat">
     <div class="sec-head rise">
       <div>
-        <h2 class="head" id="h-powiat">Powiat częstochowski</h2>
+        <h2 class="head accent" id="h-powiat">Powiat częstochowski</h2>
         <p class="soft sec-sub">16 gmin wokół Częstochowy. Wybierz swoją, żeby zobaczyć wiadomości.</p>
       </div>
       <a class="more-link" href="/powiat">Wszystkie z powiatu <Icon name="arrow" /></a>
@@ -158,7 +186,7 @@ const mail = `mailto:${SITE.email}?subject=${encodeURIComponent('Temat dla Częs
   {kraj.length > 0 && (
     <section class="wrap section" aria-labelledby="h-kraj">
       <div class="sec-head rise">
-        <h2 class="head" id="h-kraj">Z kraju</h2>
+        <h2 class="head accent" id="h-kraj">Z kraju</h2>
         <a class="more-link" href="/kraj">Więcej <Icon name="arrow" /></a>
       </div>
       <div class="grid4">{kraj.map((a, i) => <Card a={a} i={i} />)}</div>
@@ -215,20 +243,33 @@ const mail = `mailto:${SITE.email}?subject=${encodeURIComponent('Temat dla Częs
 </Base>
 
 <style>
-  /* ---------- hero ---------- */
-  .hero { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: var(--gap); margin-top: 24px; }
-  .lead-card { position: relative; display: block; border-radius: var(--r-xl); overflow: hidden; min-height: 520px; background: var(--navy); color: #fff; isolation: isolate; }
+  /* ---------- bento ---------- */
+  .bento { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) 340px; grid-template-rows: repeat(2, minmax(250px, 1fr)); gap: 14px; margin-top: 22px; }
+  .b-lead { grid-row: span 2; }
+  .live { grid-column: 3; grid-row: 1 / span 2; }
+  .lead-card { position: relative; display: block; border-radius: var(--r-xl); overflow: hidden; background: var(--navy); color: #fff; isolation: isolate; min-height: 0; }
   .lead-pic { position: absolute; inset: 0; }
   .lead-pic :global(img) { width: 100%; height: 100%; object-fit: cover; transition: transform 0.9s var(--ease); }
-  .lead-card:hover .lead-pic :global(img) { transform: scale(1.04); }
-  .lead-card::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgb(10 11 25 / 0) 30%, rgb(10 11 25 / 0.55) 58%, rgb(10 11 25 / 0.92) 100%); z-index: 0; }
-  .lead-body { position: absolute; left: 0; right: 0; bottom: 0; z-index: 1; padding: clamp(20px, 3vw, 40px); display: flex; flex-direction: column; gap: 14px; }
+  .lead-card:hover .lead-pic :global(img) { transform: scale(1.05); }
+  .lead-card::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgb(10 11 25 / 0) 28%, rgb(10 11 25 / 0.5) 56%, rgb(10 11 25 / 0.94) 100%); z-index: 0; transition: opacity 0.3s; }
+  .lead-body { position: absolute; left: 0; right: 0; bottom: 0; z-index: 1; padding: clamp(18px, 2.6vw, 36px); display: flex; flex-direction: column; gap: 12px; }
   .lead-body .card-meta { color: rgb(255 255 255 / 0.85); }
-  .lead-t { font-weight: 800; font-stretch: 88%; font-size: clamp(1.75rem, 1rem + 2.4vw, 3.25rem); line-height: 1.04; letter-spacing: -0.022em; text-wrap: balance; max-width: 22ch; }
-  .lead-l { font-size: 17px; line-height: 1.5; max-width: 62ch; color: rgb(255 255 255 / 0.9); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .lead-t { font-weight: 800; font-stretch: 88%; font-size: clamp(1.75rem, 1rem + 2.2vw, 3.1rem); line-height: 1.04; letter-spacing: -0.022em; text-wrap: balance; max-width: 20ch; }
+  .side-t { font-weight: 750; font-size: clamp(1.05rem, 0.9rem + 0.4vw, 1.3rem); line-height: 1.2; letter-spacing: -0.01em; text-wrap: balance; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .b-side .lead-body { padding: 18px; gap: 10px; }
+  .lead-l { font-size: 17px; line-height: 1.5; max-width: 60ch; color: rgb(255 255 255 / 0.9); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   .lead-more { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; width: fit-content; padding: 10px 16px; border-radius: 999px; background: #fff; color: var(--ink); transition: gap 0.25s var(--ease), background-color 0.2s, color 0.2s; }
   .lead-more :global(svg) { width: 18px; height: 18px; }
   .lead-card:hover .lead-more { gap: 12px; background: var(--red); color: #fff; }
+
+  /* ---------- tematy ---------- */
+  .topics { display: flex; align-items: center; gap: 14px; margin-top: 22px; }
+  .topics-l { display: inline-flex; align-items: center; gap: 6px; font-weight: 800; font-size: 15px; white-space: nowrap; color: var(--red-ink); }
+  .topics-l :global(svg) { width: 16px; height: 16px; fill: currentColor; stroke: none; }
+  .topics ul { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; mask-image: linear-gradient(90deg, #000 calc(100% - 40px), transparent); padding-right: 40px; }
+  .topics ul::-webkit-scrollbar { display: none; }
+  .topics a { display: block; padding: 9px 15px; border-radius: 999px; background: var(--paper); font-weight: 600; font-size: 15px; white-space: nowrap; transition: background-color 0.2s, color 0.2s; }
+  .topics a:hover { background: var(--ink); color: #fff; }
 
   .live { background: var(--paper); border-radius: var(--r-xl); padding: 24px; display: flex; flex-direction: column; gap: 8px; }
   .live-h { display: flex; align-items: center; gap: 10px; }
@@ -298,9 +339,13 @@ const mail = `mailto:${SITE.email}?subject=${encodeURIComponent('Temat dla Częs
   .cta-p1 { left: 24%; top: -4%; transform: rotate(3deg); z-index: 1; }
   .cta-p2 { right: 0; top: 18%; transform: rotate(8deg); }
 
+  @media (max-width: 1240px) {
+    .bento { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); grid-template-rows: repeat(2, minmax(220px, 1fr)) auto; }
+    .live { grid-column: 1 / -1; grid-row: auto; }
+    .live-list { columns: 2; column-gap: 32px; }
+    .live-list li { break-inside: avoid; }
+  }
   @media (max-width: 1100px) {
-    .hero { grid-template-columns: 1fr; }
-    .lead-card { min-height: 0; aspect-ratio: 16 / 10; }
     .grid4, .sport-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .feed { grid-template-columns: 1fr; }
     .feed-side { display: none; }
@@ -308,8 +353,16 @@ const mail = `mailto:${SITE.email}?subject=${encodeURIComponent('Temat dla Częs
     .cta-pics { display: none; }
   }
   @media (max-width: 760px) {
-    .hero { margin-top: 12px; }
-    .lead-card { aspect-ratio: 4 / 5; border-radius: var(--r-lg); }
+    .bento { grid-template-columns: 1fr 1fr; grid-template-rows: none; gap: 10px; margin-top: 12px; }
+    .b-lead { grid-column: 1 / -1; grid-row: auto; aspect-ratio: 4 / 5; }
+    .b-side { aspect-ratio: 3 / 4; }
+    .lead-card { border-radius: var(--r-lg); }
+    .b-side .lead-body { padding: 12px; }
+    .b-side :global(.card-meta time) { display: none; }
+    .side-t { font-size: 15px; -webkit-line-clamp: 4; }
+    .live-list { columns: 1; }
+    .topics { flex-direction: column; align-items: flex-start; gap: 10px; }
+    .topics ul { width: calc(100% + var(--m)); }
     .lead-l { display: none; }
     .live { padding: 20px; border-radius: var(--r-lg); }
     .grid4 { gap: 24px 14px; margin-top: 28px; }
@@ -318,7 +371,8 @@ const mail = `mailto:${SITE.email}?subject=${encodeURIComponent('Temat dla Częs
     .seg { flex-wrap: wrap; border-radius: 0; padding: 0; background: none; }
     .seg a { background: var(--paper); padding: 8px 12px; }
     .sport { border-radius: var(--r-lg); }
-    .club { min-height: 180px; padding: 18px; }
+    .club { grid-column: 1 / -1; min-height: 0; padding: 20px; }
+    .club strong { font-size: 2.25rem; }
     .cta { border-radius: var(--r-lg); }
     .sec-head { flex-direction: column; align-items: flex-start; }
   }

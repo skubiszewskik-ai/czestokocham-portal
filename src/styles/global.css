@@ -421,7 +421,66 @@ textarea {
 main {
   position: relative;
   z-index: 1;
+  display: flow-root; /* bez „przeciekania” marginesów – granatowe tło nie prześwituje pod nagłówkiem */
   background: var(--bg);
+  padding-top: 8px;
   padding-bottom: var(--section);
   border-radius: 0 0 var(--r-xl) var(--r-xl);
+}
+
+/* nagłówek sekcji z czerwonym akcentem */
+.head.accent {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.head.accent::before {
+  content: '';
+  width: 6px;
+  height: 0.9em;
+  border-radius: 3px;
+  background: var(--red);
+  flex: none;
+}
+
+/* karty – uniesienie przy najechaniu */
+.card .ph {
+  transition: transform 0.35s var(--ease), box-shadow 0.35s var(--ease);
+}
+.card:hover .ph {
+  transform: translateY(-4px);
+  box-shadow: var(--lift);
+}
+
+/* przycisk „do góry” */
+.to-top {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 40;
+  width: 48px;
+  height: 48px;
+  border-radius: 999px;
+  border: 0;
+  background: var(--ink);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  box-shadow: 0 12px 30px -10px rgb(22 24 48 / 0.6);
+  opacity: 0;
+  transform: translateY(16px) scale(0.9);
+  pointer-events: none;
+  transition: opacity 0.3s, transform 0.3s var(--ease), background-color 0.2s;
+}
+.to-top.on {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+.to-top:hover {
+  background: var(--red);
+}
+.to-top svg {
+  transform: rotate(-90deg);
 }

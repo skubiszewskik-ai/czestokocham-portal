@@ -3,6 +3,25 @@ export const prerender = true;
 import '../../styles/global.css';
 import { SLOTS } from '../../lib/slots';
 import { CATEGORIES } from '../../lib/site';
+const I = {
+  home: '<path d="M3 11 12 4l9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/>',
+  doc: '<path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h7"/>',
+  ad: '<rect x="3" y="5" width="18" height="14" rx="3"/><path d="M7 15l2.5-6 2.5 6M7.8 13h3.4M15 9v6h1.5a2.5 2.5 0 0 0 0-5H15"/>',
+  sync: '<path d="M20 11a8 8 0 0 0-14.6-4.5L4 8"/><path d="M4 4v4h4M4 13a8 8 0 0 0 14.6 4.5L20 16"/><path d="M20 20v-4h-4"/>',
+  cog: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
+  ext: '<path d="M14 4h6v6M20 4l-9 9"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>',
+  out: '<path d="M15 4h4a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-4M10 16l-4-4 4-4M6 12h10"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
+  back: '<path d="M19 12H5M11 6l-6 6 6 6"/>',
+  img: '<rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-9 9"/>',
+  trash: '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>',
+  eye: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+  bolt: '<path d="M13 3 5 14h6l-1 7 8-11h-6z"/>',
+  menu: '<path d="M4 7h16M4 12h16M4 17h16"/>',
+  close: '<path d="M6 6l12 12M18 6 6 18"/>',
+};
+const ic = (k: keyof typeof I) => `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${I[k]}</svg>`;
 ---
 <!doctype html>
 <html lang="pl">
@@ -10,153 +29,254 @@ import { CATEGORIES } from '../../lib/site';
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex, nofollow" />
-    <title>Panel – Częstokocham</title>
+    <title>Panel redakcji – Częstokocham</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   </head>
   <body class="adm">
-    <header class="adm-top">
-      <a href="/" class="adm-logo"><img src="/logo.svg" width="110" height="68" alt="Częstokocham" /></a>
-      <nav class="adm-tabs" hidden>
-        <button data-tab="articles" aria-current="true">Artykuły</button>
-        <button data-tab="ads">Banery</button>
-        <button data-tab="import">Import z czestochowa.pl</button>
-        <button data-tab="settings">Ustawienia</button>
-      </nav>
-      <div class="adm-user"><span id="who"></span> <button id="logout" class="btn" hidden>Wyloguj</button></div>
-    </header>
+    <!-- ============ LOGOWANIE ============ -->
+    <section id="v-login" class="login">
+      <div class="login-brand">
+        <img src="/logo-dark.svg" width="220" height="137" alt="Częstokocham" />
+        <h1>Panel redakcji</h1>
+        <ul>
+          <li>Artykuły z edytorem i galerią zdjęć</li>
+          <li>Banery reklamowe z kontrolą wymiarów</li>
+          <li>Automatyczny import z czestochowa.pl o 15:00</li>
+        </ul>
+      </div>
+      <div class="login-box">
+        <div class="login-card">
+          <h2>Zaloguj się</h2>
+          <p>Użyj konta Google, które ma dostęp do panelu.</p>
+          <button id="login" class="g-btn" type="button">
+            <svg viewBox="0 0 48 48" width="22" height="22" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="m6.3 14.7 6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>
+            Zaloguj przez Google
+          </button>
+          <p id="login-err" class="login-err" hidden></p>
+          <a class="login-back" href="/">← Wróć na stronę</a>
+        </div>
+      </div>
+    </section>
 
-    <main class="adm-main">
-      <p id="pub" class="pub" role="status"></p>
-      <!-- logowanie -->
-      <section id="v-login" class="card narrow">
-        <h1 class="head">Panel redakcji</h1>
-        <p>Zaloguj się kontem Google, które ma dostęp do panelu.</p>
-        <button id="login" class="btn red">Zaloguj przez Google</button>
-        <p id="login-err" class="err" hidden></p>
-      </section>
-
-      <!-- artykuły -->
-      <section id="v-articles" hidden>
-        <div class="bar">
-          <h1 class="head">Artykuły</h1>
-          <div class="bar-r">
-            <input id="a-q" type="search" placeholder="Szukaj po tytule" />
-            <select id="a-cat"><option value="">Wszystkie działy</option>{Object.entries(CATEGORIES).map(([k, c]) => <option value={k}>{c.name}</option>)}</select>
-            <button id="a-new" class="btn red">Nowy artykuł</button>
+    <!-- ============ APLIKACJA ============ -->
+    <div id="app" class="app" hidden>
+      <aside class="side" id="side">
+        <a class="side-logo" href="/" target="_blank" rel="noopener"><img src="/logo-dark.svg" width="120" height="75" alt="Częstokocham" /></a>
+        <nav class="side-nav" aria-label="Panel">
+          <button data-tab="dashboard" aria-current="true"><Fragment set:html={ic('home')} /> Pulpit</button>
+          <button data-tab="articles"><Fragment set:html={ic('doc')} /> Artykuły</button>
+          <button data-tab="ads"><Fragment set:html={ic('ad')} /> Banery</button>
+          <button data-tab="import"><Fragment set:html={ic('sync')} /> Import</button>
+          <button data-tab="settings"><Fragment set:html={ic('cog')} /> Ustawienia</button>
+        </nav>
+        <div class="side-foot">
+          <a class="side-link" href="/" target="_blank" rel="noopener"><Fragment set:html={ic('ext')} /> Zobacz stronę</a>
+          <div class="me">
+            <span class="me-ava" id="me-ava">?</span>
+            <span class="me-mail" id="who"></span>
+            <button id="logout" class="me-out" type="button" aria-label="Wyloguj" title="Wyloguj"><Fragment set:html={ic('out')} /></button>
           </div>
         </div>
-        <table class="tbl"><thead><tr><th>Tytuł</th><th>Dział</th><th>Status</th><th>Data</th><th>Źródło</th></tr></thead><tbody id="a-list"></tbody></table>
-        <button id="a-more" class="btn" hidden>Pokaż starsze</button>
-      </section>
+      </aside>
+      <div class="side-scrim" id="side-scrim"></div>
 
-      <!-- edytor artykułu -->
-      <section id="v-editor" hidden>
-        <div class="bar">
-          <h1 class="head" id="e-h">Nowy artykuł</h1>
-          <div class="bar-r"><a id="e-view" class="btn" target="_blank" hidden>Zobacz na stronie</a><button id="e-back" class="btn">Wróć do listy</button></div>
+      <div class="main">
+        <header class="topbar">
+          <button class="burger" id="burger" type="button" aria-label="Menu"><Fragment set:html={ic('menu')} /></button>
+          <h1 id="page-title">Pulpit</h1>
+          <span id="pub" class="pub" role="status"><span class="pub-dot"></span><span class="pub-t">Sprawdzam…</span></span>
+        </header>
+
+        <div class="views">
+          <!-- PULPIT -->
+          <section id="v-dashboard" class="view">
+            <div class="stats">
+              <div class="stat"><span class="stat-l">Opublikowane</span><strong id="st-pub">–</strong><span class="stat-s">artykułów (ostatnie 200)</span></div>
+              <div class="stat"><span class="stat-l">Dzisiaj</span><strong id="st-today">–</strong><span class="stat-s">nowych wiadomości</span></div>
+              <div class="stat"><span class="stat-l">Banery</span><strong id="st-ads">–</strong><span class="stat-s">aktywnych</span></div>
+              <div class="stat"><span class="stat-l">Ostatni import</span><strong id="st-imp">–</strong><span class="stat-s" id="st-imp-s">z czestochowa.pl</span></div>
+            </div>
+            <div class="quick">
+              <button class="qa" data-go="new-article"><span class="qa-i red"><Fragment set:html={ic('plus')} /></span><span><strong>Nowy artykuł</strong><span>Napisz i opublikuj wiadomość</span></span></button>
+              <button class="qa" data-go="new-ad"><span class="qa-i navy"><Fragment set:html={ic('ad')} /></span><span><strong>Nowy baner</strong><span>Dodaj reklamę klienta</span></span></button>
+              <button class="qa" data-go="import"><span class="qa-i green"><Fragment set:html={ic('sync')} /></span><span><strong>Importuj teraz</strong><span>Pobierz nowości z czestochowa.pl</span></span></button>
+            </div>
+            <div class="card">
+              <div class="card-h"><h2>Ostatnie artykuły</h2><button class="lnk" data-tab-go="articles">Wszystkie →</button></div>
+              <div id="dash-list" class="alist"></div>
+            </div>
+          </section>
+
+          <!-- ARTYKUŁY -->
+          <section id="v-articles" class="view" hidden>
+            <div class="toolbar">
+              <label class="search"><Fragment set:html={ic('search')} /><input id="a-q" type="search" placeholder="Szukaj po tytule…" /></label>
+              <div class="chips" id="a-cat">
+                <button data-cat="" aria-pressed="true">Wszystkie</button>
+                {Object.entries(CATEGORIES).map(([k, c]) => <button data-cat={k} style={`--c:${c.color}`}>{c.name}</button>)}
+              </div>
+              <button id="a-new" class="btn red"><Fragment set:html={ic('plus')} /> Nowy artykuł</button>
+            </div>
+            <div class="card flush"><div id="a-list" class="alist"></div></div>
+            <div class="center"><button id="a-more" class="btn ghost" hidden>Pokaż starsze</button></div>
+          </section>
+
+          <!-- EDYTOR -->
+          <section id="v-editor" class="view" hidden>
+            <form id="e-form" novalidate>
+              <div class="ebar">
+                <button type="button" class="icon-btn" id="e-back" aria-label="Wróć do listy"><Fragment set:html={ic('back')} /></button>
+                <span class="ebar-t" id="e-h">Nowy artykuł</span>
+                <span class="ebar-sp"></span>
+                <a id="e-view" class="btn ghost" target="_blank" hidden><Fragment set:html={ic('eye')} /> Podgląd</a>
+                <button type="button" id="e-del" class="btn ghost danger" hidden><Fragment set:html={ic('trash')} /> Usuń</button>
+                <button type="submit" class="btn red" id="e-save">Zapisz</button>
+              </div>
+              <div class="egrid">
+                <div class="ecol">
+                  <div class="card">
+                    <textarea name="title" class="e-title" rows="1" placeholder="Tytuł artykułu" required maxlength="160"></textarea>
+                    <div class="slug"><span class="slug-pre">czestokocham.web.app/<span id="slug-cat">miasto</span>/</span><input name="slug" required pattern="[a-z0-9-]+" placeholder="adres-artykulu" /></div>
+                    <textarea name="lead" class="e-lead" rows="2" maxlength="400" placeholder="Lead – 1–2 zdania wstępu, pogrubione pod tytułem"></textarea>
+                  </div>
+                  <div class="card rte-card">
+                    <div class="rte-bar" role="toolbar" aria-label="Formatowanie">
+                      <button type="button" data-cmd="bold" title="Pogrubienie"><b>B</b></button>
+                      <button type="button" data-cmd="italic" title="Kursywa"><i>I</i></button>
+                      <span class="sep"></span>
+                      <button type="button" data-cmd="h2" title="Śródtytuł">H2</button>
+                      <button type="button" data-cmd="p" title="Akapit">¶</button>
+                      <button type="button" data-cmd="quote" title="Cytat">“ ”</button>
+                      <span class="sep"></span>
+                      <button type="button" data-cmd="ul" title="Lista">• Lista</button>
+                      <button type="button" data-cmd="ol" title="Lista numerowana">1. Lista</button>
+                      <button type="button" data-cmd="link" title="Link">Link</button>
+                      <span class="sep"></span>
+                      <button type="button" data-cmd="clear" title="Wyczyść formatowanie">Wyczyść</button>
+                    </div>
+                    <div id="rte" class="rte" contenteditable="true" data-ph="Zacznij pisać treść…"></div>
+                  </div>
+                  <div class="card">
+                    <div class="card-h"><h2>Galeria</h2><span class="hint" id="gal-n"></span></div>
+                    <div id="gal" class="thumbs"></div>
+                    <label class="drop" data-drop="gal"><Fragment set:html={ic('img')} /><span><strong>Przeciągnij zdjęcia</strong> albo kliknij, aby wybrać</span><small>JPG, PNG, WebP – zamienimy na WebP</small><input id="gal-in" type="file" accept="image/*" multiple /></label>
+                  </div>
+                </div>
+                <div class="ecol side-col">
+                  <div class="card">
+                    <h2 class="ch">Publikacja</h2>
+                    <label>Status<select name="status"><option value="published">Opublikowany</option><option value="draft">Szkic</option></select></label>
+                    <label>Dział<select name="category">{Object.entries(CATEGORIES).map(([k, c]) => <option value={k}>{c.name}</option>)}</select></label>
+                    <label>Data publikacji<input name="publishedAt" type="datetime-local" required /></label>
+                    <label class="switch"><input name="featured" type="checkbox" /><span class="sw"></span> Główny temat na stronie</label>
+                  </div>
+                  <div class="card">
+                    <h2 class="ch">Zdjęcie główne</h2>
+                    <div id="cover" class="cover"></div>
+                    <label class="drop small" data-drop="cover"><Fragment set:html={ic('img')} /><span><strong>Wybierz</strong> lub upuść zdjęcie</span><input id="cover-in" type="file" accept="image/*" /></label>
+                    <label>Opis zdjęcia (alt)<input name="coverAlt" placeholder="Co widać na zdjęciu" /></label>
+                    <label>Autor zdjęć<input name="photoCredit" placeholder="np. Jan Kowalski" /></label>
+                  </div>
+                  <div class="card">
+                    <h2 class="ch">Autor i źródło</h2>
+                    <label>Autor<input name="author" value="Redakcja" /></label>
+                    <label>Źródło – nazwa<input name="sourceName" placeholder="np. czestochowa.pl" /></label>
+                    <label>Źródło – adres<input name="sourceUrl" type="url" placeholder="https://" /></label>
+                  </div>
+                </div>
+              </div>
+            </form>
+          </section>
+
+          <!-- BANERY -->
+          <section id="v-ads" class="view" hidden>
+            <div class="toolbar">
+              <p class="hint grow">Banery rotują losowo według wagi. Puste miejsce wypełnia reklama Google (jeśli włączona) albo zaproszenie do reklamy.</p>
+              <button id="ad-new" class="btn red"><Fragment set:html={ic('plus')} /> Nowy baner</button>
+            </div>
+            <div id="ad-list" class="adgrid"></div>
+            <div class="card">
+              <div class="card-h"><h2>Miejsca reklamowe i wymiary</h2></div>
+              <div class="slots">
+                {Object.entries(SLOTS).map(([k, s]) => (
+                  <div class="slot"><strong>{s.name}</strong><span class="num">{s.desktop.join('×')} px{s.mobile ? ` · tel. ${s.mobile.join('×')}` : ' · tylko komputer'}</span><small>{s.where}</small></div>
+                ))}
+              </div>
+            </div>
+          </section>
+
+          <!-- IMPORT -->
+          <section id="v-import" class="view" hidden>
+            <div class="card import-hero">
+              <span class="qa-i green big"><Fragment set:html={ic('sync')} /></span>
+              <div class="grow">
+                <h2>Import z czestochowa.pl</h2>
+                <p>Codziennie po 15:00 automat pobiera nowe aktualności z <a href="https://www.czestochowa.pl/aktualnosci" target="_blank" rel="noopener">czestochowa.pl/aktualnosci</a> razem ze zdjęciami (WebP) i publikuje je z dopiskiem „Źródło: czestochowa.pl”. Zaimportowane artykuły możesz edytować – kolejny import ich nie nadpisze.</p>
+              </div>
+              <button id="imp-run" class="btn red"><Fragment set:html={ic('bolt')} /> Importuj teraz</button>
+            </div>
+            <div class="card flush">
+              <div class="card-h pad"><h2>Historia</h2></div>
+              <table class="tbl"><thead><tr><th>Kiedy</th><th>Uruchomienie</th><th>Sprawdzono</th><th>Nowe</th><th>Błędy</th></tr></thead><tbody id="imp-list"></tbody></table>
+            </div>
+          </section>
+
+          <!-- USTAWIENIA -->
+          <section id="v-settings" class="view" hidden>
+            <form id="s-form" class="sgrid">
+              <div class="card">
+                <h2 class="ch">Google AdSense</h2>
+                <label class="switch"><input name="adsenseEnabled" type="checkbox" /><span class="sw"></span> Wyświetlaj reklamy Google w wolnych miejscach</label>
+                <label>Identyfikator wydawcy<input name="adsenseClient" placeholder="ca-pub-0000000000000000" pattern="ca-pub-[0-9]+" /></label>
+                <div class="grid2">
+                  {Object.entries(SLOTS).map(([k, s]) => <label>{s.name}<input name={`slot_${k}`} placeholder="ID jednostki, np. 1234567890" /></label>)}
+                </div>
+                <label>Dodatkowe linie ads.txt<textarea name="adsTxt" rows="3"></textarea></label>
+              </div>
+              <div class="sgrid-side">
+                <div class="card">
+                  <h2 class="ch">Statystyki</h2>
+                  <label>Google Analytics 4<input name="analyticsId" placeholder="G-XXXXXXX" /></label>
+                </div>
+                <div class="card">
+                  <h2 class="ch">Dostęp do panelu</h2>
+                  <label>Adresy e-mail Google, po jednym w linii<textarea name="admins" rows="5"></textarea></label>
+                </div>
+                <button class="btn red wide" type="submit">Zapisz ustawienia</button>
+              </div>
+            </form>
+          </section>
         </div>
-        <form id="e-form" class="grid2">
-          <div class="col-main">
-            <label>Tytuł<input name="title" required maxlength="160" /></label>
-            <label>Adres (slug)<input name="slug" required pattern="[a-z0-9-]+" /></label>
-            <label>Lead (wstęp, pogrubiony pod tytułem)<textarea name="lead" rows="3" maxlength="400"></textarea></label>
-            <div class="lbl">Treść</div>
-            <div class="rte-bar" role="toolbar" aria-label="Formatowanie">
-              <button type="button" data-cmd="bold"><b>B</b></button>
-              <button type="button" data-cmd="italic"><i>I</i></button>
-              <button type="button" data-cmd="h2">Śródtytuł</button>
-              <button type="button" data-cmd="p">Akapit</button>
-              <button type="button" data-cmd="ul">Lista</button>
-              <button type="button" data-cmd="ol">Lista num.</button>
-              <button type="button" data-cmd="quote">Cytat</button>
-              <button type="button" data-cmd="link">Link</button>
-              <button type="button" data-cmd="clear">Wyczyść format</button>
-            </div>
-            <div id="rte" class="rte" contenteditable="true"></div>
-            <div class="lbl">Galeria</div>
-            <div id="gal" class="thumbs"></div>
-            <label class="up">Dodaj zdjęcia do galerii<input id="gal-in" type="file" accept="image/*" multiple /></label>
-          </div>
-          <div class="col-side">
-            <label>Dział<select name="category">{Object.entries(CATEGORIES).map(([k, c]) => <option value={k}>{c.name}</option>)}</select></label>
-            <label>Status<select name="status"><option value="published">Opublikowany</option><option value="draft">Szkic</option></select></label>
-            <label>Data publikacji<input name="publishedAt" type="datetime-local" required /></label>
-            <label class="chk"><input name="featured" type="checkbox" /> Wyróżniony (główny na stronie)</label>
-            <label>Autor<input name="author" value="Redakcja" /></label>
-            <label>Autor zdjęć<input name="photoCredit" /></label>
-            <label>Źródło – nazwa<input name="sourceName" placeholder="np. czestochowa.pl" /></label>
-            <label>Źródło – adres<input name="sourceUrl" type="url" /></label>
-            <div class="lbl">Zdjęcie główne</div>
-            <div id="cover" class="cover"></div>
-            <label class="up">Wybierz zdjęcie<input id="cover-in" type="file" accept="image/*" /></label>
-            <label>Opis zdjęcia (alt)<input name="coverAlt" /></label>
-            <p class="hint">Zdjęcia są automatycznie zmniejszane i zapisywane w WebP (główne 640 i 1280 px, galeria 480 i 1200 px).</p>
-            <div class="actions">
-              <button type="submit" class="btn red">Zapisz</button>
-              <button type="button" id="e-del" class="btn danger" hidden>Usuń artykuł</button>
-            </div>
-            <p id="e-msg" class="msg" role="status"></p>
-          </div>
-        </form>
-      </section>
+      </div>
+    </div>
 
-      <!-- banery -->
-      <section id="v-ads" hidden>
-        <div class="bar"><h1 class="head">Banery</h1><div class="bar-r"><button id="ad-new" class="btn red">Nowy baner</button></div></div>
-        <p class="hint">Gdy w miejscu nie ma aktywnego banera, wyświetla się reklama Google (jeśli włączona) albo zaproszenie „Tu może być Twoja reklama”. Kilka banerów w jednym miejscu rotuje losowo według wagi.</p>
-        <table class="tbl"><thead><tr><th>Klient</th><th>Miejsce</th><th>Okres</th><th>Aktywny</th></tr></thead><tbody id="ad-list"></tbody></table>
+    <!-- szuflada banera -->
+    <div class="drawer-scrim" id="ad-scrim" hidden></div>
+    <aside class="drawer" id="ad-drawer" aria-label="Baner" hidden>
+      <form id="ad-form">
+        <div class="drawer-h"><h2 id="ad-h">Nowy baner</h2><button type="button" class="icon-btn" id="ad-cancel" aria-label="Zamknij"><Fragment set:html={ic('close')} /></button></div>
+        <div class="drawer-b">
+          <label>Miejsce<select name="slot">{Object.entries(SLOTS).map(([k, s]) => <option value={k}>{s.name} – {s.desktop.join('×')}{s.mobile ? ` / tel. ${s.mobile.join('×')}` : ''}</option>)}</select></label>
+          <label>Klient<input name="client" required placeholder="Nazwa firmy" /></label>
+          <label>Adres docelowy<input name="link" type="url" required placeholder="https://" /></label>
+          <label>Tekst alternatywny<input name="alt" placeholder="Opis grafiki" /></label>
+          <div class="grid2"><label>Od<input name="start" type="date" /></label><label>Do<input name="end" type="date" /></label></div>
+          <div class="grid2"><label>Waga rotacji<input name="weight" type="number" min="1" max="10" value="1" /></label><label class="switch top"><input name="active" type="checkbox" checked /><span class="sw"></span> Aktywny</label></div>
+          <div><div class="lbl" id="dim-d">Grafika – komputer</div><div id="ad-d" class="adprev"></div><label class="drop small" data-drop="ad-d"><span><strong>Wybierz plik</strong> lub upuść</span><input id="ad-d-in" type="file" accept="image/*" /></label></div>
+          <div id="ad-m-wrap"><div class="lbl" id="dim-m">Grafika – telefon</div><div id="ad-m" class="adprev"></div><label class="drop small" data-drop="ad-m"><span><strong>Wybierz plik</strong> lub upuść</span><input id="ad-m-in" type="file" accept="image/*" /></label></div>
+          <p class="hint">Grafika w podanym wymiarze albo dwukrotnie większa. JPG/PNG zamieniamy na WebP, GIF zostaje bez zmian.</p>
+        </div>
+        <div class="drawer-f"><button class="btn ghost danger" type="button" id="ad-del" hidden>Usuń</button><span class="grow"></span><button class="btn red" type="submit">Zapisz baner</button></div>
+      </form>
+    </aside>
 
-        <form id="ad-form" class="card" hidden>
-          <h2 class="ad-h" id="ad-h">Nowy baner</h2>
-          <div class="grid3">
-            <label>Miejsce<select name="slot">{Object.entries(SLOTS).map(([k, s]) => <option value={k}>{s.name} – {s.desktop.join('×')}{s.mobile ? ` / tel. ${s.mobile.join('×')}` : ''}</option>)}</select></label>
-            <label>Klient<input name="client" required /></label>
-            <label>Adres docelowy<input name="link" type="url" required placeholder="https://" /></label>
-            <label>Tekst alternatywny<input name="alt" /></label>
-            <label>Od<input name="start" type="date" /></label>
-            <label>Do<input name="end" type="date" /></label>
-            <label>Waga rotacji<input name="weight" type="number" min="1" max="10" value="1" /></label>
-            <label class="chk"><input name="active" type="checkbox" checked /> Aktywny</label>
-          </div>
-          <div class="grid2 ad-imgs">
-            <div><div class="lbl" id="dim-d">Grafika – komputer</div><div id="ad-d" class="adprev"></div><label class="up">Wybierz plik<input id="ad-d-in" type="file" accept="image/*" /></label></div>
-            <div id="ad-m-wrap"><div class="lbl" id="dim-m">Grafika – telefon</div><div id="ad-m" class="adprev"></div><label class="up">Wybierz plik<input id="ad-m-in" type="file" accept="image/*" /></label></div>
-          </div>
-          <p class="hint">Grafika musi mieć dokładnie podany wymiar albo dwukrotnie większy. JPG/PNG zamieniamy na WebP, GIF zostaje bez zmian (animacja).</p>
-          <div class="actions"><button class="btn red" type="submit">Zapisz baner</button><button class="btn" type="button" id="ad-cancel">Anuluj</button><button class="btn danger" type="button" id="ad-del" hidden>Usuń</button></div>
-          <p id="ad-msg" class="msg" role="status"></p>
-        </form>
-      </section>
+    <dialog id="confirm" class="confirm">
+      <h2 id="cf-t">Na pewno?</h2>
+      <p id="cf-m"></p>
+      <div class="cf-b"><button class="btn ghost" value="no" id="cf-no">Anuluj</button><button class="btn red" value="yes" id="cf-yes">Usuń</button></div>
+    </dialog>
+    <div class="toasts" id="toasts" aria-live="polite"></div>
 
-      <!-- import -->
-      <section id="v-import" hidden>
-        <div class="bar"><h1 class="head">Import z czestochowa.pl</h1><div class="bar-r"><button id="imp-run" class="btn red">Importuj teraz</button></div></div>
-        <p>Codziennie po 15:00 automat pobiera nowe aktualności z <a class="link" href="https://www.czestochowa.pl/aktualnosci" target="_blank" rel="noopener">czestochowa.pl/aktualnosci</a> razem ze zdjęciami (WebP) i publikuje je w dziale Miasto (lub Sport) z podpisem „Źródło: czestochowa.pl”. Zaimportowane artykuły można dowolnie edytować – kolejny import ich nie nadpisze.</p>
-        <p id="imp-msg" class="msg" role="status"></p>
-        <table class="tbl"><thead><tr><th>Kiedy</th><th>Uruchomienie</th><th>Sprawdzono</th><th>Nowe</th><th>Błędy</th></tr></thead><tbody id="imp-list"></tbody></table>
-      </section>
-
-      <!-- ustawienia -->
-      <section id="v-settings" hidden>
-        <div class="bar"><h1 class="head">Ustawienia</h1></div>
-        <form id="s-form" class="card">
-          <h2 class="ad-h">Google AdSense</h2>
-          <label class="chk"><input name="adsenseEnabled" type="checkbox" /> Wyświetlaj reklamy Google w wolnych miejscach</label>
-          <label>Identyfikator wydawcy<input name="adsenseClient" placeholder="ca-pub-0000000000000000" pattern="ca-pub-[0-9]+" /></label>
-          <div class="grid3">
-            {Object.entries(SLOTS).map(([k, s]) => <label>Jednostka: {s.name}<input name={`slot_${k}`} placeholder="np. 1234567890" /></label>)}
-          </div>
-          <label>Dodatkowe linie ads.txt<textarea name="adsTxt" rows="3"></textarea></label>
-          <h2 class="ad-h">Statystyki</h2>
-          <label>Google Analytics 4 – identyfikator<input name="analyticsId" placeholder="G-XXXXXXX" /></label>
-          <h2 class="ad-h">Dostęp do panelu</h2>
-          <label>Adresy e-mail (Google), po jednym w linii<textarea name="admins" rows="4"></textarea></label>
-          <div class="actions"><button class="btn red" type="submit">Zapisz ustawienia</button></div>
-          
-          <p id="s-msg" class="msg" role="status"></p>
-        </form>
-      </section>
-    </main>
     <script>
       import '../../admin/admin.ts';
     </script>
@@ -164,61 +284,246 @@ import { CATEGORIES } from '../../lib/site';
 </html>
 
 <style is:global>
-  .adm { background: var(--paper); font-size: 16px; }
-  .adm-top { display: flex; align-items: center; gap: 24px; padding: 8px 20px; background: #fff; flex-wrap: wrap; }
-  .adm-logo img { height: 48px; width: auto; }
-  .adm-tabs { display: flex; gap: 4px; flex-wrap: wrap; }
-  .adm-tabs button { background: var(--tone); border: 0; padding: 12px 16px; font-weight: 650; cursor: pointer; }
-  .adm-tabs button[aria-current] { background: var(--ink); color: #fff; }
-  .adm-user { margin-left: auto; display: flex; gap: 12px; align-items: center; }
-  .adm-main { padding: 24px 20px 80px; max-width: 1400px; margin: 0 auto; }
-  .pub { font-size: 15px; font-weight: 600; margin-bottom: 16px; min-height: 1.4em; }
-  .adm .head { font-size: 2rem; }
-  .card { background: #fff; padding: 24px; margin-top: 16px; display: grid; gap: 14px; }
-  .narrow { max-width: 480px; margin: 10vh auto; }
-  .bar { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; }
-  .bar-r { display: flex; gap: 8px; flex-wrap: wrap; }
-  .adm input:not([type='checkbox']), .adm select, .adm textarea { width: 100%; min-height: 44px; padding: 8px 12px; border: 1px solid #b9b9b0; background: #fff; border-radius: 0; font-size: 16px; }
-  .bar-r input, .bar-r select { width: auto; }
-  .adm label { display: grid; gap: 4px; font-weight: 600; font-size: 15px; }
-  .adm label.chk { display: flex; align-items: center; gap: 8px; }
-  .lbl { font-weight: 600; font-size: 15px; margin-top: 6px; }
-  .tbl { width: 100%; border-collapse: collapse; background: #fff; }
-  .tbl th, .tbl td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--tone); font-size: 15px; vertical-align: top; }
-  .tbl th { background: var(--tone); }
-  .tbl tr[data-id] { cursor: pointer; }
-  .tbl tr[data-id]:hover td { background: var(--paper); }
-  .pill { display: inline-block; padding: 2px 8px; font-size: 13px; background: var(--tone); }
-  .pill.on { background: #d6f0dc; }
-  .pill.off { background: #f6d6d6; }
-  .grid2 { display: grid; grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr); gap: 24px; }
-  .ad-imgs { grid-template-columns: 1fr 1fr; }
-  .grid3 { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; }
-  .col-main, .col-side { display: grid; gap: 12px; align-content: start; background: #fff; padding: 20px; }
-  .rte-bar { display: flex; flex-wrap: wrap; gap: 4px; }
-  .rte-bar button { border: 0; background: var(--tone); padding: 8px 12px; cursor: pointer; font-size: 14px; }
-  .rte-bar button:hover { background: var(--tone-2); }
-  .rte { min-height: 360px; padding: 16px; border: 1px solid #b9b9b0; background: #fff; font-size: 18px; line-height: 1.6; }
-  .rte p { margin-bottom: 1em; }
-  .rte h2 { font-size: 1.3rem; margin: 1em 0 0.4em; }
-  .rte ul { list-style: disc; padding-left: 1.2em; }
-  .rte ol { list-style: decimal; padding-left: 1.4em; }
-  .rte blockquote { background: var(--tone); padding: 12px 16px; }
-  .rte a { color: var(--red-ink); text-decoration: underline; }
-  .thumbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 6px; }
-  .thumbs figure { position: relative; aspect-ratio: 4 / 3; background: var(--tone); }
-  .thumbs img, .cover img { width: 100%; height: 100%; object-fit: cover; }
-  .thumbs button { position: absolute; top: 4px; right: 4px; border: 0; background: var(--ink); color: #fff; cursor: pointer; padding: 4px 8px; font-size: 13px; }
-  .cover { aspect-ratio: 16 / 9; background: var(--tone); }
-  .adprev { background: var(--tone); min-height: 80px; display: grid; place-items: center; font-size: 14px; color: var(--ink-soft); }
-  .adprev img { max-width: 100%; height: auto; }
-  .up { display: inline-flex !important; cursor: pointer; background: var(--tone); padding: 10px 14px; width: fit-content; }
-  .up input { position: absolute; opacity: 0; width: 1px; height: 1px; }
-  .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
-  .btn.danger { background: #8a0b10; }
+  .adm { background: #f2f3f7; font-size: 15.5px; color: var(--ink); }
+  .adm main { all: unset; }
+  .adm input:not([type='checkbox']):not([type='file']), .adm select, .adm textarea {
+    width: 100%; min-height: 44px; padding: 10px 14px; border: 1.5px solid #e1e3ea; background: #fff; border-radius: 12px; font-size: 15.5px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .adm input:focus, .adm select:focus, .adm textarea:focus { outline: none; border-color: var(--ink); box-shadow: 0 0 0 4px rgb(17 19 38 / 0.08); }
+  .adm label { display: grid; gap: 6px; font-weight: 600; font-size: 14px; color: var(--ink-2); }
+  .adm .btn { min-height: 42px; padding: 0 16px; font-size: 15px; }
+  .adm .btn svg { width: 18px; height: 18px; }
+  .btn.danger { color: #b3121b; }
+  .btn.ghost.danger:hover { background: #fde4e5; }
+  .btn.wide { width: 100%; }
+  .grow { flex: 1; }
   .hint { font-size: 14px; color: var(--ink-soft); }
-  .msg { font-weight: 600; min-height: 1.4em; }
-  .err { color: var(--red-ink); font-weight: 600; }
-  .ad-h { font-size: 1.25rem; font-weight: 750; margin-top: 8px; }
-  @media (max-width: 900px) { .grid2, .ad-imgs { grid-template-columns: 1fr; } .tbl th:nth-child(n + 4), .tbl td:nth-child(n + 4) { display: none; } }
+  .lbl { font-weight: 600; font-size: 14px; color: var(--ink-2); margin-bottom: 6px; }
+  .center { display: flex; justify-content: center; margin-top: 16px; }
+
+  /* logowanie */
+  .login { min-height: 100dvh; display: grid; grid-template-columns: 1fr 1fr; }
+  .login-brand { background: var(--navy); color: #fff; padding: clamp(32px, 6vw, 80px); display: flex; flex-direction: column; justify-content: center; gap: 20px; position: relative; overflow: hidden; }
+  .login-brand::after { content: ''; position: absolute; width: 520px; height: 520px; right: -180px; bottom: -200px; border-radius: 50%; background: var(--red); opacity: 0.18; filter: blur(10px); }
+  .login-brand img { width: 220px; height: auto; }
+  .login-brand h1 { font-size: clamp(2rem, 1.2rem + 2.5vw, 3.25rem); font-weight: 800; font-stretch: 88%; letter-spacing: -0.02em; }
+  .login-brand ul { display: grid; gap: 10px; color: var(--on-navy-soft); font-size: 17px; }
+  .login-brand li { display: flex; gap: 10px; align-items: center; }
+  .login-brand li::before { content: ''; width: 8px; height: 8px; border-radius: 3px; background: var(--red); }
+  .login-box { display: grid; place-items: center; padding: 32px; }
+  .login-card { width: min(420px, 100%); background: #fff; border-radius: 24px; padding: 40px; box-shadow: 0 30px 70px -30px rgb(22 24 48 / 0.35); display: grid; gap: 14px; }
+  .login-card h2 { font-size: 28px; font-weight: 800; }
+  .login-card p { color: var(--ink-soft); }
+  .g-btn { display: flex; align-items: center; justify-content: center; gap: 12px; min-height: 54px; border-radius: 14px; border: 1.5px solid #e1e3ea; background: #fff; font-weight: 700; font-size: 16px; cursor: pointer; margin-top: 8px; transition: background-color 0.2s, border-color 0.2s, transform 0.2s var(--ease); }
+  .g-btn:hover { background: #f6f7fa; border-color: #c9ccd6; }
+  .g-btn:active { transform: scale(0.98); }
+  .login-err { background: #fde4e5; color: #9b0f16; padding: 12px 14px; border-radius: 12px; font-weight: 600; font-size: 14px; }
+  .login-back { color: var(--ink-soft); font-size: 14px; margin-top: 6px; }
+  .login-back:hover { color: var(--ink); }
+
+  /* układ aplikacji */
+  .app { display: grid; grid-template-columns: 252px minmax(0, 1fr); min-height: 100dvh; }
+  .side { background: var(--navy); color: #fff; padding: 20px 14px; display: flex; flex-direction: column; gap: 24px; position: sticky; top: 0; height: 100dvh; }
+  .side-logo { padding: 4px 10px; }
+  .side-logo img { width: 116px; height: auto; }
+  .side-nav { display: grid; gap: 4px; }
+  .side-nav button { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 0; background: none; color: var(--on-navy-soft); border-radius: 12px; font-weight: 650; font-size: 15.5px; cursor: pointer; text-align: left; transition: background-color 0.2s, color 0.2s; }
+  .side-nav button:hover { background: var(--navy-2); color: #fff; }
+  .side-nav button[aria-current] { background: #fff; color: var(--ink); }
+  .side-nav button[aria-current] svg { color: var(--red); }
+  .side-foot { margin-top: auto; display: grid; gap: 10px; }
+  .side-link { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 12px; color: var(--on-navy-soft); font-weight: 600; font-size: 14.5px; }
+  .side-link:hover { background: var(--navy-2); color: #fff; }
+  .side-link svg { width: 18px; height: 18px; }
+  .me { display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 14px; background: var(--navy-2); }
+  .me-ava { flex: none; width: 34px; height: 34px; border-radius: 10px; background: var(--red); display: grid; place-items: center; font-weight: 800; text-transform: uppercase; }
+  .me-mail { flex: 1; min-width: 0; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--on-navy-soft); }
+  .me-out { border: 0; background: none; color: var(--on-navy-soft); cursor: pointer; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 8px; }
+  .me-out:hover { background: var(--red); color: #fff; }
+  .me-out svg { width: 18px; height: 18px; }
+  .main { min-width: 0; display: flex; flex-direction: column; }
+  .topbar { position: sticky; top: 0; z-index: 10; display: flex; align-items: center; gap: 16px; padding: 16px 32px; background: rgb(242 243 247 / 0.85); backdrop-filter: blur(12px); }
+  .topbar h1 { font-size: 26px; font-weight: 800; letter-spacing: -0.015em; }
+  .burger { display: none; border: 0; background: #fff; width: 42px; height: 42px; border-radius: 12px; place-items: center; cursor: pointer; }
+  .pub { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 999px; background: #fff; font-size: 13.5px; font-weight: 600; color: var(--ink-2); }
+  .pub-dot { width: 8px; height: 8px; border-radius: 50%; background: #b9bccb; }
+  .pub.ok .pub-dot { background: #16a34a; box-shadow: 0 0 0 4px rgb(22 163 74 / 0.15); }
+  .pub.wait .pub-dot { background: #f59e0b; box-shadow: 0 0 0 4px rgb(245 158 11 / 0.18); animation: blink 1.4s infinite; }
+  @keyframes blink { 50% { opacity: 0.4; } }
+  .views { padding: 8px 32px 64px; }
+  .view { display: grid; gap: 20px; animation: vin 0.35s var(--ease); }
+  @keyframes vin { from { opacity: 0; transform: translateY(8px); } }
+
+  .card { background: #fff; border-radius: 20px; padding: 22px; display: grid; gap: 14px; box-shadow: 0 1px 2px rgb(22 24 48 / 0.04); }
+  .card.flush { padding: 0; overflow: hidden; }
+  .card-h { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .card-h.pad { padding: 20px 22px 0; }
+  .card h2, .ch { font-size: 17px; font-weight: 800; letter-spacing: -0.005em; }
+  .lnk { border: 0; background: none; font-weight: 650; color: var(--red-ink); cursor: pointer; }
+
+  /* pulpit */
+  .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+  .stat { background: #fff; border-radius: 20px; padding: 20px 22px; display: grid; gap: 4px; }
+  .stat-l { font-size: 13.5px; font-weight: 650; color: var(--ink-soft); }
+  .stat strong { font-size: 34px; font-weight: 800; font-stretch: 88%; letter-spacing: -0.02em; line-height: 1.1; }
+  .stat-s { font-size: 13.5px; color: var(--ink-soft); }
+  .quick { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+  .qa { display: flex; align-items: center; gap: 14px; text-align: left; padding: 18px; border-radius: 20px; border: 0; background: #fff; cursor: pointer; transition: transform 0.25s var(--ease), box-shadow 0.25s; }
+  .qa:hover { transform: translateY(-3px); box-shadow: 0 18px 36px -20px rgb(22 24 48 / 0.4); }
+  .qa strong { display: block; font-size: 16px; }
+  .qa span span { font-size: 13.5px; color: var(--ink-soft); }
+  .qa-i { flex: none; display: grid; place-items: center; width: 46px; height: 46px; border-radius: 14px; color: #fff; }
+  .qa-i.big { width: 56px; height: 56px; border-radius: 16px; }
+  .qa-i.red { background: var(--red); } .qa-i.navy { background: var(--navy); } .qa-i.green { background: #0b7a54; }
+
+  /* lista artykułów */
+  .toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .search { position: relative; flex: 1; min-width: 220px; max-width: 380px; }
+  .search svg { position: absolute; left: 14px; top: 50%; translate: 0 -50%; color: var(--ink-soft); width: 18px; }
+  .search input { padding-left: 42px !important; border-radius: 999px !important; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chips button { border: 0; background: #fff; padding: 9px 14px; border-radius: 999px; font-weight: 650; font-size: 14px; cursor: pointer; transition: background-color 0.2s, color 0.2s; }
+  .chips button:hover { background: #e7e9ef; }
+  .chips button[aria-pressed='true'] { background: var(--c, var(--ink)); color: #fff; }
+  .toolbar .btn.red { margin-left: auto; }
+  .alist { display: grid; }
+  .arow { display: grid; grid-template-columns: 76px minmax(0, 1fr) auto; gap: 16px; align-items: center; padding: 12px 22px; cursor: pointer; transition: background-color 0.15s; border: 0; background: none; text-align: left; width: 100%; }
+  .arow + .arow { border-top: 1px solid #eef0f4; }
+  .arow:hover { background: #f7f8fb; }
+  .arow-img { width: 76px; height: 52px; border-radius: 10px; background: #e7e9ef center / cover no-repeat; }
+  .arow-t { font-weight: 700; font-size: 15.5px; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .arow-m { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 4px; font-size: 13px; color: var(--ink-soft); }
+  .arow-r { display: flex; gap: 8px; align-items: center; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font-size: 12.5px; font-weight: 700; background: #eef0f4; color: var(--ink-2); white-space: nowrap; }
+  .pill.on { background: #dcfce7; color: #166534; }
+  .pill.off { background: #fef3c7; color: #92400e; }
+  .pill.star { background: #fde4e5; color: #9b0f16; }
+  .empty-s { padding: 40px; text-align: center; color: var(--ink-soft); }
+
+  /* edytor */
+  .ebar { position: sticky; top: 74px; z-index: 5; display: flex; align-items: center; gap: 10px; padding: 10px 12px; margin-bottom: 18px; background: #fff; border-radius: 18px; box-shadow: 0 10px 30px -22px rgb(22 24 48 / 0.5); }
+  .ebar-t { font-weight: 800; font-size: 16px; }
+  .ebar-sp { flex: 1; }
+  .icon-btn { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 12px; border: 0; background: #f2f3f7; cursor: pointer; transition: background-color 0.2s; }
+  .icon-btn:hover { background: #e4e6ec; }
+  .egrid { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 20px; align-items: start; }
+  .ecol { display: grid; gap: 20px; }
+  .side-col { position: sticky; top: 150px; }
+  .adm .e-title { border: 0 !important; padding: 0 !important; font-size: clamp(1.6rem, 1.2rem + 1vw, 2.2rem) !important; font-weight: 800; letter-spacing: -0.02em; line-height: 1.15; resize: none; box-shadow: none !important; min-height: 0 !important; overflow: hidden; }
+  .adm .e-lead { border: 0 !important; padding: 0 !important; font-size: 18px !important; font-weight: 500; resize: vertical; box-shadow: none !important; color: var(--ink-2); }
+  .slug { display: flex; align-items: center; gap: 0; background: #f2f3f7; border-radius: 10px; padding-left: 12px; font-size: 13.5px; color: var(--ink-soft); }
+  .slug-pre { white-space: nowrap; }
+  .adm .slug input { border: 0 !important; background: transparent !important; min-height: 36px !important; padding: 6px 10px 6px 0 !important; font-size: 13.5px !important; box-shadow: none !important; }
+  .rte-card { gap: 0; padding: 0; }
+  .rte-bar { display: flex; flex-wrap: wrap; gap: 4px; padding: 10px; background: #f7f8fb; border-bottom: 1px solid #eef0f4; border-radius: 20px 20px 0 0; position: sticky; top: 140px; z-index: 2; }
+  .rte-bar button { border: 0; background: transparent; padding: 8px 11px; border-radius: 9px; cursor: pointer; font-size: 14px; font-weight: 600; transition: background-color 0.15s; }
+  .rte-bar button:hover { background: #e7e9ef; }
+  .rte-bar .sep { width: 1px; background: #e1e3ea; margin: 4px 4px; }
+  .rte { min-height: 420px; padding: 22px 24px; font-size: 18px; line-height: 1.7; outline: none; }
+  .rte:empty::before { content: attr(data-ph); color: #a0a3b3; }
+  .rte p { margin-bottom: 1em; }
+  .rte h2 { font-size: 1.35rem; font-weight: 800; margin: 1em 0 0.4em; }
+  .rte ul { list-style: disc; padding-left: 1.3em; margin-bottom: 1em; }
+  .rte ol { list-style: decimal; padding-left: 1.4em; margin-bottom: 1em; }
+  .rte blockquote { background: #f2f3f7; padding: 14px 18px; border-radius: 12px; margin: 1em 0; }
+  .rte a { color: var(--red-ink); text-decoration: underline; }
+  .thumbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
+  .thumbs:empty { display: none; }
+  .thumbs figure { position: relative; aspect-ratio: 4 / 3; border-radius: 12px; overflow: hidden; background: #eef0f4; }
+  .thumbs img, .cover img { width: 100%; height: 100%; object-fit: cover; }
+  .thumbs button { position: absolute; top: 6px; right: 6px; border: 0; background: rgb(17 19 38 / 0.8); color: #fff; cursor: pointer; width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; font-size: 16px; }
+  .thumbs button:hover { background: var(--red); }
+  .cover { aspect-ratio: 16 / 9; border-radius: 14px; overflow: hidden; background: #eef0f4; }
+  .cover:empty { display: none; }
+  .drop { position: relative; display: grid !important; justify-items: center; text-align: center; gap: 6px !important; padding: 26px 18px; border: 2px dashed #d5d8e1; border-radius: 16px; background: #fafbfc; cursor: pointer; color: var(--ink-soft) !important; font-weight: 500 !important; transition: border-color 0.2s, background-color 0.2s; }
+  .drop.small { padding: 16px; }
+  .drop strong { color: var(--ink); }
+  .drop small { font-size: 12.5px; }
+  .drop svg { width: 26px; height: 26px; color: var(--ink-soft); }
+  .drop:hover, .drop.over { border-color: var(--red); background: #fff5f5; }
+  .drop input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+  .drop.busy { pointer-events: none; opacity: 0.6; }
+  .switch { display: flex !important; align-items: center; gap: 12px !important; cursor: pointer; font-weight: 600; }
+  .switch.top { align-self: end; min-height: 44px; }
+  .switch input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+  .sw { position: relative; flex: none; width: 44px; height: 26px; border-radius: 999px; background: #d5d8e1; transition: background-color 0.2s; }
+  .sw::after { content: ''; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgb(0 0 0 / 0.25); transition: transform 0.25s var(--ease); }
+  .switch input:checked + .sw { background: #16a34a; }
+  .switch input:checked + .sw::after { transform: translateX(18px); }
+  .switch input:focus-visible + .sw { outline: 3px solid var(--red); outline-offset: 2px; }
+
+  /* banery */
+  .adgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+  .adcard { background: #fff; border-radius: 20px; overflow: hidden; cursor: pointer; border: 0; padding: 0; text-align: left; display: grid; transition: transform 0.25s var(--ease), box-shadow 0.25s; }
+  .adcard:hover { transform: translateY(-3px); box-shadow: 0 18px 36px -20px rgb(22 24 48 / 0.4); }
+  .adcard-img { aspect-ratio: 16 / 7; background: #eef0f4 center / contain no-repeat; }
+  .adcard-b { padding: 14px 16px 16px; display: grid; gap: 6px; }
+  .adcard-b strong { font-size: 16px; }
+  .adcard-b small { color: var(--ink-soft); font-size: 13px; }
+  .slots { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
+  .slot { background: #f7f8fb; border-radius: 14px; padding: 14px; display: grid; gap: 4px; }
+  .slot span { font-weight: 700; color: var(--red-ink); font-size: 14px; }
+  .slot small { color: var(--ink-soft); font-size: 13px; }
+  .adprev { background: #f2f3f7; border-radius: 12px; min-height: 60px; display: grid; place-items: center; font-size: 13px; color: var(--ink-soft); margin-bottom: 8px; overflow: hidden; }
+  .adprev img { max-width: 100%; height: auto; }
+  .drawer-scrim, .side-scrim { position: fixed; inset: 0; background: rgb(17 19 38 / 0.45); z-index: 50; animation: fade 0.25s; }
+  .side-scrim { display: none; }
+  @keyframes fade { from { opacity: 0; } }
+  .drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(520px, 100vw); background: #fff; z-index: 51; box-shadow: -30px 0 60px -30px rgb(22 24 48 / 0.5); animation: slide 0.35s var(--ease); }
+  @keyframes slide { from { transform: translateX(100%); } }
+  .drawer form { height: 100%; display: grid; grid-template-rows: auto 1fr auto; }
+  .drawer-h { display: flex; align-items: center; justify-content: space-between; padding: 20px 22px; border-bottom: 1px solid #eef0f4; }
+  .drawer-h h2 { font-size: 20px; font-weight: 800; }
+  .drawer-b { overflow-y: auto; padding: 22px; display: grid; gap: 16px; align-content: start; }
+  .drawer-f { display: flex; gap: 10px; padding: 16px 22px; border-top: 1px solid #eef0f4; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+
+  /* import, ustawienia */
+  .import-hero { display: flex; align-items: center; gap: 20px; }
+  .import-hero h2 { font-size: 20px; margin-bottom: 6px; }
+  .import-hero p { color: var(--ink-2); max-width: 70ch; }
+  .import-hero a { color: var(--red-ink); text-decoration: underline; }
+  .tbl { width: 100%; border-collapse: collapse; }
+  .tbl th, .tbl td { text-align: left; padding: 12px 22px; font-size: 14.5px; border-top: 1px solid #eef0f4; }
+  .tbl th { color: var(--ink-soft); font-weight: 650; font-size: 13px; }
+  .sgrid { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 20px; align-items: start; }
+  .sgrid-side { display: grid; gap: 20px; position: sticky; top: 90px; }
+
+  /* toasty i potwierdzenia */
+  .toasts { position: fixed; right: 20px; bottom: 20px; z-index: 60; display: grid; gap: 10px; }
+  .toast { display: flex; align-items: center; gap: 10px; min-width: 280px; max-width: 420px; padding: 14px 16px; border-radius: 14px; background: var(--ink); color: #fff; font-weight: 600; font-size: 14.5px; box-shadow: 0 20px 40px -20px rgb(0 0 0 / 0.5); animation: tin 0.35s var(--ease); }
+  .toast::before { content: ''; flex: none; width: 8px; height: 8px; border-radius: 50%; background: #4ade80; }
+  .toast.err { background: #9b0f16; }
+  .toast.err::before { background: #fff; }
+  .toast.out { opacity: 0; transform: translateY(8px); transition: 0.3s; }
+  @keyframes tin { from { opacity: 0; transform: translateY(12px); } }
+  .confirm { border: 0; border-radius: 22px; padding: 26px; width: min(420px, 92vw); box-shadow: 0 30px 70px -20px rgb(0 0 0 / 0.45); }
+  .confirm::backdrop { background: rgb(17 19 38 / 0.5); }
+  .confirm h2 { font-size: 20px; font-weight: 800; margin-bottom: 8px; }
+  .confirm p { color: var(--ink-2); }
+  .cf-b { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px; }
+
+  @media (max-width: 1200px) { .stats { grid-template-columns: repeat(2, 1fr); } .egrid, .sgrid { grid-template-columns: 1fr; } .side-col, .sgrid-side { position: static; } }
+  @media (max-width: 900px) {
+    .login { grid-template-columns: 1fr; }
+    .login-brand { padding: 32px 24px; }
+    .login-brand ul { display: none; }
+    .app { grid-template-columns: 1fr; }
+    .side { position: fixed; left: 0; top: 0; z-index: 52; width: 270px; transform: translateX(-100%); transition: transform 0.3s var(--ease); }
+    .app.nav-open .side { transform: none; }
+    .app.nav-open .side-scrim { display: block; }
+    .burger { display: grid; }
+    .topbar { padding: 12px 16px; }
+    .topbar h1 { font-size: 22px; }
+    .views { padding: 4px 16px 48px; }
+    .quick { grid-template-columns: 1fr; }
+    .pub .pub-t { display: none; }
+    .ebar { top: 66px; flex-wrap: wrap; }
+    .rte-bar { top: 0; position: static; }
+    .import-hero { flex-direction: column; align-items: flex-start; }
+    .arow { grid-template-columns: 64px minmax(0, 1fr); padding: 12px 16px; }
+    .arow-r { grid-column: 2; }
+    .tbl th:nth-child(n + 3), .tbl td:nth-child(n + 3) { display: none; }
+  }
 </style>

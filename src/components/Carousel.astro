@@ -1,0 +1,51 @@
+---
+// Poziomy pasek kart ze strzałkami (scroll-snap; działa też palcem i bez JS)
+import Icon from './Icon.astro';
+interface Props { title: string; href?: string; linkText?: string; id: string; dark?: boolean }
+const { title, href, linkText = 'Zobacz wszystkie', id, dark = false } = Astro.props;
+---
+<section class:list={['car', { 'car--dark': dark }]} aria-labelledby={id} data-car>
+  <div class="car-head">
+    <h2 class="head accent" id={id}>{title}</h2>
+    <div class="car-ctrl">
+      {href && <a class="more-link" href={href}>{linkText} <Icon name="arrow" /></a>}
+      <button class="car-btn" type="button" aria-label="Poprzednie" data-prev disabled><Icon name="arrow" /></button>
+      <button class="car-btn" type="button" aria-label="Następne" data-next><Icon name="arrow" /></button>
+    </div>
+  </div>
+  <div class="car-track" data-track><slot /></div>
+</section>
+<script is:inline>
+  document.querySelectorAll('[data-car]:not([data-ready])').forEach(function (c) {
+    c.setAttribute('data-ready', '');
+    var t = c.querySelector('[data-track]'), p = c.querySelector('[data-prev]'), n = c.querySelector('[data-next]');
+    function upd() { p.disabled = t.scrollLeft < 8; n.disabled = t.scrollLeft + t.clientWidth > t.scrollWidth - 8; }
+    p.addEventListener('click', function () { t.scrollBy({ left: -t.clientWidth * 0.9, behavior: 'smooth' }); });
+    n.addEventListener('click', function () { t.scrollBy({ left: t.clientWidth * 0.9, behavior: 'smooth' }); });
+    t.addEventListener('scroll', upd, { passive: true });
+    addEventListener('resize', upd);
+    upd();
+  });
+</script>
+<style>
+  .car-head { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 22px; }
+  .car-head .head { white-space: nowrap; }
+  .car-ctrl { display: flex; align-items: center; gap: 8px; }
+  .car-ctrl .more-link { margin-right: 10px; }
+  .car-btn { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 999px; border: 0; background: var(--paper); color: var(--ink); cursor: pointer; transition: background-color 0.2s, color 0.2s, transform 0.2s var(--ease), opacity 0.2s; }
+  .car-btn[data-prev] :global(svg) { transform: rotate(180deg); }
+  .car-btn:hover:not(:disabled) { background: var(--ink); color: #fff; }
+  .car-btn:active:not(:disabled) { transform: scale(0.94); }
+  .car-btn:disabled { opacity: 0.35; cursor: default; }
+  .car-track { display: grid; grid-auto-flow: column; grid-auto-columns: calc((100% - 3 * var(--gap)) / 4); gap: var(--gap); overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; padding-bottom: 8px; margin-bottom: -8px; overscroll-behavior-x: contain; }
+  .car-track::-webkit-scrollbar { display: none; }
+  .car-track > :global(*) { scroll-snap-align: start; }
+  .car--dark .car-btn { background: var(--navy-2); color: #fff; }
+  .car--dark .car-btn:hover:not(:disabled) { background: #fff; color: var(--ink); }
+  @media (max-width: 1100px) { .car-track { grid-auto-columns: calc((100% - var(--gap)) / 2.3); } }
+  @media (max-width: 760px) {
+    .car-track { grid-auto-columns: 74%; margin-inline: calc(var(--m) * -1); padding-inline: var(--m); scroll-padding-inline: var(--m); }
+    .car-btn { display: none; }
+    .car-ctrl .more-link { margin-right: 0; }
+  }
+</style>

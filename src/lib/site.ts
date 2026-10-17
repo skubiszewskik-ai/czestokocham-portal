@@ -7,7 +7,6 @@ export const SITE = {
   phone: '884 971 219',
   company: 'STUDIOPROMO SP. Z O.O.',
   facebook: 'https://www.facebook.com/czestokocham',
-  instagram: 'https://www.instagram.com/czestokocham/',
   lang: 'pl',
 };
 
