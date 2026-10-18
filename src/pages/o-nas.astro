@@ -1,6 +1,6 @@
 ---
 import Page from '../components/Page.astro';
-import { SITE } from '../lib/site';
+import { PUBLISHER, PUBLISHER_ADDRESS, SITE } from '../lib/site';
 ---
 <Page title="O nas" lede="Piszemy o tym, co dzieje się w Częstochowie i powiecie." description="Częstokocham – kim jesteśmy i jak się z nami skontaktować.">
   <h2>Częstokocham</h2>
@@ -13,5 +13,15 @@ import { SITE } from '../lib/site';
     <li>Telefon: <a href={`tel:+48${SITE.phone.replace(/\s/g, '')}`}>{SITE.phone}</a></li>
     <li>Facebook: <a href={SITE.facebook} rel="noopener" target="_blank">facebook.com/czestokocham</a></li>
   </ul>
-  <p>Wydawca: {SITE.company}, Częstochowa.</p>
+  <h2>Jak powstają nasze teksty</h2>
+  <p>Część wiadomości przygotowujemy z pomocą narzędzi sztucznej inteligencji – na podstawie komunikatów instytucji i informacji opublikowanych w innych mediach. Każdy taki tekst przed publikacją czyta, sprawdza i zatwierdza redakcja, która ponosi za niego odpowiedzialność. Jeśli informacja pochodzi z własnego materiału innej redakcji, podajemy jej nazwę i odnośnik. Ilustracje wygenerowane przez AI zawsze podpisujemy.</p>
+  <h2>Stopka redakcyjna</h2>
+  <ul>
+    <li>Tytuł: Częstokocham – portal informacyjny Częstochowy i powiatu częstochowskiego</li>
+    <li>Wydawca: {PUBLISHER.name} ({PUBLISHER.kind}), {PUBLISHER_ADDRESS}, NIP {PUBLISHER.nip}, REGON {PUBLISHER.regon}</li>
+    {PUBLISHER.representative && <li>Przedstawiciel stowarzyszenia: {PUBLISHER.representative}</li>}
+    {PUBLISHER.editorInChief && <li>Redaktor naczelny: {PUBLISHER.editorInChief}</li>}
+    <li>Adres redakcji: {PUBLISHER_ADDRESS}, e-mail <a href={`mailto:${SITE.email}`}>{SITE.email}</a></li>
+  </ul>
+  <p>Zasady korzystania z portalu opisuje <a href="/regulamin">regulamin</a>, a sposób przetwarzania danych – <a href="/polityka-prywatnosci">polityka prywatności</a>.</p>
 </Page>

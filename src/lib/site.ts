@@ -5,10 +5,22 @@ export const SITE = {
     'Częstokocham – portal informacyjny Częstochowy i powiatu częstochowskiego. Wiadomości z miasta, powiatu, kraju i sport.',
   email: 'czestokocham@gmail.com',
   phone: '884 971 219',
-  company: 'STUDIOPROMO SP. Z O.O.',
   facebook: 'https://www.facebook.com/czestokocham',
   lang: 'pl',
 };
+
+// Wydawca portalu – stowarzyszenie zwykłe (dane z rejestru REGON; nazwiska uzupełnić po stronie stowarzyszenia)
+export const PUBLISHER = {
+  name: 'Stowarzyszenie Częstokocham',
+  kind: 'stowarzyszenie zwykłe',
+  street: 'ul. Kopernika 43/23',
+  city: '42-217 Częstochowa',
+  nip: '5732874304',
+  regon: '365739159',
+  representative: '', // przedstawiciel stowarzyszenia (imię i nazwisko)
+  editorInChief: '', // redaktor naczelny (wymaga tego prawo prasowe)
+};
+export const PUBLISHER_ADDRESS = `${PUBLISHER.street}, ${PUBLISHER.city}`;
 
 export const CATEGORIES = {
   miasto: { name: 'Miasto', title: 'Częstochowa', color: '#e3141b', lede: 'Co się dzieje w Częstochowie: urząd, inwestycje, drogi, kultura i ludzie.' },

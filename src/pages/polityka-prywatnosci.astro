@@ -1,14 +1,62 @@
 ---
 import Page from '../components/Page.astro';
-import { SITE } from '../lib/site';
+import { PUBLISHER, PUBLISHER_ADDRESS, SITE } from '../lib/site';
+const UPDATED = '18 października 2026 r.';
+const mail = `mailto:${SITE.email}`;
 ---
-<Page title="Prywatność" lede="Polityka prywatności i plików cookies." description="Polityka prywatności i plików cookies portalu Częstokocham.">
-  <h2>Administrator</h2>
-  <p>Administratorem danych jest {SITE.company} z siedzibą w Częstochowie, kontakt: <a href={`mailto:${SITE.email}`}>{SITE.email}</a>.</p>
-  <h2>Jakie dane zbieramy</h2>
-  <p>Portal można czytać bez zakładania konta. Jeśli napiszesz do nas e-mail, przetwarzamy Twój adres i treść wiadomości wyłącznie po to, aby odpowiedzieć lub opisać zgłoszony temat.</p>
-  <h2>Pliki cookies i reklamy</h2>
-  <p>Sama strona nie zapisuje plików cookies. Pliki cookies mogą zapisywać usługi zewnętrzne: Google AdSense (wyświetlanie reklam) oraz Google Analytics (statystyki odwiedzin), o ile są włączone. Zgodę na ich użycie zbiera komunikat Google wyświetlany przy pierwszej wizycie. Szczegóły: <a href="https://policies.google.com/technologies/ads?hl=pl" rel="noopener" target="_blank">jak Google wykorzystuje pliki cookie w reklamach</a>.</p>
-  <h2>Twoje prawa</h2>
-  <p>Masz prawo dostępu do swoich danych, ich sprostowania, usunięcia, ograniczenia przetwarzania oraz wniesienia skargi do Prezesa UODO.</p>
+<Page title="Prywatność" lede="Polityka prywatności i plików cookies portalu Częstokocham." description="Polityka prywatności i plików cookies portalu Częstokocham – kto przetwarza dane, w jakim celu i jakie masz prawa.">
+  <p>Obowiązuje od {UPDATED} Opisujemy tu, jakie dane osobowe przetwarzamy, gdy korzystasz z portalu Częstokocham, i jakie masz prawa. Stosujemy rozporządzenie RODO (UE 2016/679) i polskie przepisy o ochronie danych.</p>
+
+  <h2>1. Administrator danych</h2>
+  <p>Administratorem danych jest <strong>{PUBLISHER.name}</strong> – {PUBLISHER.kind} z siedzibą pod adresem {PUBLISHER_ADDRESS}, NIP {PUBLISHER.nip}, REGON {PUBLISHER.regon}{PUBLISHER.representative && <>, reprezentowane przez przedstawiciela: {PUBLISHER.representative}</>}.</p>
+  <p>Kontakt w sprawach danych osobowych: <a href={mail}>{SITE.email}</a>, tel. {SITE.phone}, albo listownie na adres siedziby. Nie wyznaczyliśmy inspektora ochrony danych – nie mamy takiego obowiązku.</p>
+
+  <h2>2. Jakie dane, w jakim celu i na jakiej podstawie</h2>
+  <table>
+    <thead><tr><th>Sytuacja</th><th>Dane</th><th>Cel i podstawa prawna</th><th>Jak długo</th></tr></thead>
+    <tbody>
+      <tr><td>Czytanie portalu</td><td>adres IP, data i godzina wizyty, adres podstrony, informacje o przeglądarce (dzienniki serwera)</td><td>zapewnienie działania i bezpieczeństwa strony – nasz prawnie uzasadniony interes (art. 6 ust. 1 lit. f RODO)</td><td>do 30 dni</td></tr>
+      <tr><td>Wiadomość e-mail, telefon, zgłoszenie tematu lub zdjęcia, uwagi do artykułu</td><td>imię i nazwisko lub pseudonim, adres e-mail, numer telefonu, treść wiadomości, przesłane materiały</td><td>odpowiedź, sprawdzenie i opisanie sprawy – prawnie uzasadniony interes (art. 6 ust. 1 lit. f RODO) oraz działalność dziennikarska</td><td>do zakończenia sprawy, a potem do 3 lat na wypadek roszczeń</td></tr>
+      <tr><td>Zamówienie reklamy</td><td>dane osoby kontaktowej i firmy, dane do rozliczeń</td><td>zawarcie i wykonanie umowy (art. 6 ust. 1 lit. b RODO), obowiązki podatkowe i rachunkowe (art. 6 ust. 1 lit. c RODO)</td><td>przez czas umowy, a potem przez okres wymagany przepisami podatkowymi (zwykle 5 lat)</td></tr>
+      <tr><td>Sprostowanie lub odpowiedź prasowa</td><td>dane wnioskodawcy i treść wniosku</td><td>wypełnienie obowiązków z prawa prasowego (art. 6 ust. 1 lit. c RODO)</td><td>do 3 lat od rozpatrzenia</td></tr>
+      <tr><td>Reklamy i statystyki Google (jeśli są włączone)</td><td>identyfikatory plików cookies, adres IP, informacje o urządzeniu i odwiedzanych stronach</td><td>wyświetlanie reklam i mierzenie oglądalności – wyłącznie po Twojej zgodzie (art. 6 ust. 1 lit. a RODO); zgodę możesz w każdej chwili wycofać</td><td>do wycofania zgody lub wygaśnięcia pliku cookie</td></tr>
+    </tbody>
+  </table>
+  <p>Podanie danych jest dobrowolne. Bez adresu e-mail lub telefonu nie odpowiemy jednak na wiadomość. Nie podejmujemy wobec Ciebie decyzji opartych wyłącznie na zautomatyzowanym przetwarzaniu.</p>
+
+  <h2>3. Działalność dziennikarska</h2>
+  <p>Portal jest prasą w rozumieniu prawa prasowego. W zakresie redagowania i publikowania materiałów prasowych niektóre przepisy RODO stosuje się w ograniczonym zakresie (art. 85 RODO i art. 2 ustawy z 10 maja 2018 r. o ochronie danych osobowych). Chronimy tajemnicę dziennikarską: na życzenie nie ujawniamy danych osób, które przekazały nam informacje.</p>
+
+  <h2>4. Komu przekazujemy dane</h2>
+  <ul>
+    <li><strong>Google Ireland Limited</strong> i <strong>Google LLC</strong> – hosting strony i bazy danych (Firebase), poczta e-mail redakcji oraz – jeśli są włączone – reklamy Google AdSense i statystyki Google Analytics.</li>
+    <li>Firmy obsługujące księgowość stowarzyszenia – tylko w zakresie rozliczeń z reklamodawcami.</li>
+    <li>Organy publiczne – tylko gdy wymaga tego prawo.</li>
+  </ul>
+  <p>Google może przetwarzać dane także w Stanach Zjednoczonych. Podstawą jest decyzja Komisji Europejskiej w sprawie EU-US Data Privacy Framework, w którym Google uczestniczy, oraz standardowe klauzule umowne.</p>
+
+  <h2>5. Pliki cookies</h2>
+  <p>Sam portal nie zapisuje plików cookies – do czytania artykułów nie są potrzebne. Pliki cookies mogą zapisać usługi Google, gdy są włączone:</p>
+  <ul>
+    <li><strong>Google AdSense</strong> – wyświetlanie reklam, w tym dopasowanych do zainteresowań;</li>
+    <li><strong>Google Analytics</strong> – anonimowe statystyki odwiedzin.</li>
+  </ul>
+  <p>Przed zapisaniem takich plików pytamy o zgodę w komunikacie wyświetlanym przy pierwszej wizycie. Do tego czasu statystyki działają bez plików cookies. Zgodę możesz zmienić, otwierając ponownie ten komunikat (ikona ustawień prywatności Google na stronie), albo w ustawieniach przeglądarki, usuwając pliki cookies. Więcej: <a href="https://policies.google.com/technologies/partner-sites?hl=pl" rel="noopener" target="_blank">jak Google wykorzystuje dane z witryn partnerów</a>.</p>
+  <p>Pracownicy redakcji logują się do panelu przez konto Google – wtedy Google zapisuje dane logowania w przeglądarce. Czytelników to nie dotyczy.</p>
+
+  <h2>6. Twoje prawa</h2>
+  <p>Masz prawo do:</p>
+  <ul>
+    <li>dostępu do swoich danych i otrzymania ich kopii,</li>
+    <li>sprostowania danych,</li>
+    <li>usunięcia danych lub ograniczenia ich przetwarzania,</li>
+    <li>przeniesienia danych przekazanych na podstawie zgody lub umowy,</li>
+    <li>sprzeciwu wobec przetwarzania opartego na naszym prawnie uzasadnionym interesie,</li>
+    <li>wycofania zgody w dowolnym momencie – nie wpływa to na zgodność z prawem przetwarzania przed wycofaniem,</li>
+    <li>wniesienia skargi do Prezesa Urzędu Ochrony Danych Osobowych (ul. Stawki 2, 00-193 Warszawa, <a href="https://uodo.gov.pl" rel="noopener" target="_blank">uodo.gov.pl</a>).</li>
+  </ul>
+  <p>Aby skorzystać z praw, napisz na <a href={mail}>{SITE.email}</a>. Odpowiemy w ciągu miesiąca.</p>
+
+  <h2>7. Zmiany polityki</h2>
+  <p>Politykę aktualizujemy, gdy zmieniają się przepisy lub sposób działania portalu. Aktualna wersja jest zawsze na tej stronie, a o istotnych zmianach informujemy na stronie głównej.</p>
 </Page>

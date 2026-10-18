@@ -1,6 +1,6 @@
 ---
 import Icon from './Icon.astro';
-import { CATEGORIES, CATEGORY_KEYS, SITE } from '../lib/site';
+import { CATEGORIES, CATEGORY_KEYS, PUBLISHER, SITE } from '../lib/site';
 const mail = `mailto:${SITE.email}?subject=${encodeURIComponent('Temat dla Częstokocham')}`;
 ---
 <footer class="foot">
@@ -29,6 +29,7 @@ const mail = `mailto:${SITE.email}?subject=${encodeURIComponent('Temat dla Częs
             <li><a href="/reklama">Reklama</a></li>
             <li><a href="/szukaj">Szukaj</a></li>
             <li><a href="/rss.xml">Kanał RSS</a></li>
+            <li><a href="/regulamin">Regulamin</a></li>
           </ul>
         </div>
         <div>
@@ -36,8 +37,8 @@ const mail = `mailto:${SITE.email}?subject=${encodeURIComponent('Temat dla Częs
           <ul>
             <li><a href={`mailto:${SITE.email}`}>{SITE.email}</a></li>
             <li><a href={`tel:+48${SITE.phone.replace(/\s/g, '')}`}>{SITE.phone}</a></li>
-            <li>{SITE.company}</li>
-            <li>Częstochowa</li>
+            <li>{PUBLISHER.name}</li>
+            <li>{PUBLISHER.street}, {PUBLISHER.city}</li>
           </ul>
         </div>
       </div>
@@ -47,7 +48,7 @@ const mail = `mailto:${SITE.email}?subject=${encodeURIComponent('Temat dla Częs
       <a class="btn red" href={mail}><Icon name="mail" /> Zgłoś temat</a>
     </div>
     <p class="legal">
-      © {new Date().getFullYear()} Częstokocham · <a href="/polityka-prywatnosci">Polityka prywatności i cookies</a> · Artykuły oznaczone „Źródło: czestochowa.pl” publikujemy za zgodą Urzędu Miasta Częstochowy, a „Źródło: wczestochowie.pl” – za zgodą redakcji wCzestochowie.pl.
+      © {new Date().getFullYear()} {PUBLISHER.name} · <a href="/polityka-prywatnosci">Polityka prywatności i cookies</a> · <a href="/regulamin">Regulamin</a> · Artykuły oznaczone „Źródło: czestochowa.pl” publikujemy za zgodą Urzędu Miasta Częstochowy, a „Źródło: wczestochowie.pl” – za zgodą redakcji wCzestochowie.pl.
     </p>
   </div>
 </footer>

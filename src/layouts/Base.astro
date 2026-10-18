@@ -119,6 +119,8 @@ const adsense = settings.adsenseEnabled && settings.adsenseClient ? settings.ads
             g.src = 'https://www.googletagmanager.com/gtag/js?id=' + ga; document.head.appendChild(g);
             window.dataLayer = window.dataLayer || [];
             window.gtag = function () { dataLayer.push(arguments); };
+            // RODO: bez zgody (komunikat Google przy reklamach) statystyki nie zapisują plików cookies
+            gtag('consent', 'default', { ad_storage: 'denied', ad_user_data: 'denied', ad_personalization: 'denied', analytics_storage: 'denied', wait_for_update: 500 });
             gtag('js', new Date()); gtag('config', ga);
           }
         }

@@ -6,7 +6,7 @@ export const GET: APIRoute = async ({ site }) => {
   const urls = [
     ['/', new Date()],
     ...CATEGORY_KEYS.map((k) => [`/${k}`, new Date()]),
-    ['/o-nas', null], ['/reklama', null],
+    ['/o-nas', null], ['/reklama', null], ['/regulamin', null], ['/polityka-prywatnosci', null],
     ...items.map((a) => [articleUrl(a), a.updatedAt || a.publishedAt]),
   ] as [string, Date | null][];
   const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls

@@ -1,0 +1,92 @@
+---
+import Page from '../components/Page.astro';
+import { PUBLISHER, PUBLISHER_ADDRESS, SITE } from '../lib/site';
+const UPDATED = '18 października 2026 r.';
+const mail = `mailto:${SITE.email}`;
+---
+<Page title="Regulamin" lede="Zasady korzystania z portalu Częstokocham." description="Regulamin portalu Częstokocham – zasady korzystania, prawa autorskie, materiały od czytelników, sprostowania i reklamacje.">
+  <p>Regulamin obowiązuje od {UPDATED} Został przygotowany na podstawie ustawy z 18 lipca 2002 r. o świadczeniu usług drogą elektroniczną.</p>
+
+  <h2>§ 1. Kto prowadzi portal</h2>
+  <ol>
+    <li>Portal Częstokocham (czestokocham.web.app i czestokocham.com) prowadzi <strong>{PUBLISHER.name}</strong> – {PUBLISHER.kind}, {PUBLISHER_ADDRESS}, NIP {PUBLISHER.nip}, REGON {PUBLISHER.regon} („Wydawca”).</li>
+    <li>Kontakt: <a href={mail}>{SITE.email}</a>, tel. {SITE.phone}, adres siedziby.</li>
+    <li>„Czytelnik” to każda osoba korzystająca z portalu.</li>
+  </ol>
+
+  <h2>§ 2. Co oferuje portal</h2>
+  <ol>
+    <li>Wydawca bezpłatnie udostępnia wiadomości i inne materiały o Częstochowie i powiecie częstochowskim, wyszukiwarkę artykułów i kanał RSS.</li>
+    <li>Czytanie portalu nie wymaga zakładania konta ani podawania danych. Umowa o korzystanie z portalu zawiera się z chwilą otwarcia strony i kończy, gdy ją zamkniesz.</li>
+    <li>Czytelnik może przesłać redakcji temat, informację, zdjęcie lub uwagę do artykułu e-mailem lub telefonicznie.</li>
+  </ol>
+
+  <h2>§ 3. Wymagania techniczne</h2>
+  <p>Wystarczy urządzenie z dostępem do internetu i aktualna przeglądarka (np. Chrome, Firefox, Safari, Edge). Wyszukiwarka wymaga włączonej obsługi JavaScriptu, a wysłanie wiadomości – konta poczty e-mail. Korzystanie z internetu wiąże się z typowymi zagrożeniami (np. złośliwe oprogramowanie); warto mieć aktualny system i przeglądarkę.</p>
+
+  <h2>§ 4. Zasady korzystania</h2>
+  <ol>
+    <li>Zabronione jest przesyłanie treści o charakterze bezprawnym, w szczególności naruszających dobra osobiste, prawa autorskie lub prywatność innych osób.</li>
+    <li>Nie wolno zakłócać działania portalu, w tym masowo pobierać jego treści w sposób obciążający serwer.</li>
+  </ol>
+
+  <h2>§ 5. Prawa autorskie</h2>
+  <ol>
+    <li>Teksty, zdjęcia, grafiki i układ portalu są chronione prawem autorskim. Bez zgody Wydawcy nie wolno ich kopiować ani rozpowszechniać w całości lub w znacznej części.</li>
+    <li>Dozwolone jest cytowanie fragmentów w granicach prawa cytatu – z podaniem źródła „Częstokocham” i odnośnikiem do artykułu.</li>
+    <li>Materiały oznaczone „Źródło: …” pochodzą od wskazanych podmiotów i publikujemy je za ich zgodą lub na podstawie przepisów prawa. Prawa do nich przysługują ich autorom.</li>
+    <li>Zdjęcia z Wikimedia Commons publikujemy na wolnych licencjach podanych w podpisie (np. CC BY-SA) – można z nich korzystać na zasadach tych licencji.</li>
+  </ol>
+
+  <h2>§ 6. Materiały od Czytelników</h2>
+  <ol>
+    <li>Przesyłając zdjęcie, nagranie lub tekst, Czytelnik oświadcza, że ma do nich prawa, a osoby na nich widoczne nie sprzeciwiają się publikacji (lub ich wizerunek jest szczegółem większej całości, np. tłumu).</li>
+    <li>Czytelnik udziela Wydawcy nieodpłatnej, niewyłącznej licencji na opublikowanie materiału w portalu i jego profilach społecznościowych – bez ograniczeń czasowych i terytorialnych – oraz zgody na skrócenie lub opracowanie redakcyjne.</li>
+    <li>Na życzenie podpisujemy materiał imieniem, nazwiskiem lub pseudonimem autora albo zachowujemy jego anonimowość (tajemnica dziennikarska).</li>
+    <li>Redakcja decyduje, czy i w jakiej formie opublikuje materiał.</li>
+  </ol>
+
+  <h2>§ 7. Jak powstają teksty</h2>
+  <p>Teksty przygotowuje redakcja. Część wiadomości opracowujemy z pomocą narzędzi sztucznej inteligencji na podstawie komunikatów instytucji i informacji z innych mediów. Każdy taki materiał przed publikacją sprawdza i zatwierdza redakcja, która ponosi za niego odpowiedzialność. Ilustracje wygenerowane przez AI są podpisane.</p>
+
+  <h2>§ 8. Sprostowania i odpowiedzi</h2>
+  <ol>
+    <li>Wniosek o sprostowanie nieprawdziwej lub nieścisłej informacji należy przesłać w terminie 21 dni od publikacji materiału, zgodnie z ustawą Prawo prasowe, na piśmie na adres siedziby Wydawcy lub e-mailem na <a href={mail}>{SITE.email}</a>{PUBLISHER.editorInChief && <>, z adnotacją „do redaktora naczelnego – {PUBLISHER.editorInChief}”</>}.</li>
+    <li>Wniosek powinien zawierać dane wnioskodawcy, wskazanie materiału i treść sprostowania. Rozpatrujemy go w terminach przewidzianych w prawie prasowym.</li>
+    <li>Drobne błędy (literówki, pomyłki w datach) można zgłaszać przyciskiem „Zgłoś uwagę” pod artykułem – poprawiamy je niezwłocznie.</li>
+  </ol>
+
+  <h2>§ 9. Reklamy</h2>
+  <ol>
+    <li>Reklamy w portalu są oznaczone. Za treść reklamy odpowiada reklamodawca.</li>
+    <li>Warunki publikacji reklam ustalamy indywidualnie – szczegóły na stronie <a href="/reklama">Reklama</a>.</li>
+  </ol>
+
+  <h2>§ 10. Reklamacje</h2>
+  <ol>
+    <li>Reklamację dotyczącą działania portalu można złożyć e-mailem na <a href={mail}>{SITE.email}</a> lub listownie. Prosimy opisać problem i podać dane do odpowiedzi.</li>
+    <li>Rozpatrujemy ją w ciągu 14 dni i odpowiadamy w ten sam sposób, w jaki ją otrzymaliśmy.</li>
+    <li>Konsument może skorzystać z pozasądowych sposobów rozwiązywania sporów, np. pomocy miejskiego rzecznika konsumentów.</li>
+  </ol>
+
+  <h2>§ 11. Odpowiedzialność</h2>
+  <ol>
+    <li>Dokładamy starań, by informacje były rzetelne i aktualne. Treści mają charakter informacyjny i nie są poradą prawną, medyczną ani finansową.</li>
+    <li>Nie odpowiadamy za treść stron zewnętrznych, do których prowadzą odnośniki.</li>
+    <li>Wydawca może czasowo wyłączyć portal z powodu prac technicznych lub awarii.</li>
+  </ol>
+
+  <h2>§ 12. Dane osobowe</h2>
+  <p>Zasady przetwarzania danych osobowych i plików cookies opisuje <a href="/polityka-prywatnosci">polityka prywatności</a>.</p>
+
+  <h2>§ 13. Postanowienia końcowe</h2>
+  <ol>
+    <li>Regulamin jest dostępny bezpłatnie na tej stronie – można go zapisać lub wydrukować.</li>
+    <li>Wydawca może zmienić regulamin z ważnych powodów (np. zmiana przepisów lub zakresu usług). Zmiany obowiązują od publikacji nowej wersji na tej stronie.</li>
+    <li>W sprawach nieuregulowanych stosuje się prawo polskie, w szczególności Kodeks cywilny, ustawę o świadczeniu usług drogą elektroniczną, Prawo prasowe i ustawę o prawie autorskim. Regulamin nie ogranicza praw konsumentów wynikających z przepisów.</li>
+  </ol>
+</Page>
+<style>
+  ol { list-style: decimal; padding-left: 1.3em; margin-bottom: 1em; }
+  ol li + li { margin-top: 0.4em; }
+</style>
