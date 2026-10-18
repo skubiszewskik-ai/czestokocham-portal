@@ -94,10 +94,18 @@ if (args.has('--redaktor') || build.redaktorRequested) {
     },
     photos: async () => (await firestore.collection('photos').get()).docs.map((d) => ({ id: d.id, ...plainTs(d.data()) })),
     usePhoto: (id) => firestore.collection('photos').doc(id).update({ lastUsedAt: FieldValue.serverTimestamp() }),
+    pending: async () =>
+      (await firestore.collection('articles').where('origin', '==', 'redaktor').where('status', '==', 'draft').select('publishedAt').get())
+        .docs.map((d) => ({ slug: d.id, publishedAt: d.get('publishedAt')?.toMillis() || 0 })),
+    // zostaje tylko ślad (redaktor nie wróci do tematu), treść i zdjęcia znikają
+    prune: async (slug) => {
+      await firestore.collection('articles').doc(slug).update({ status: 'deleted', body: '', lead: '', cover: null, gallery: [], prunedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+      await fs.rm(path.join(MEDIA, 'articles', slug), { recursive: true, force: true });
+    },
   };
   const cfg = (await firestore.collection('config').doc('redaktor').get()).data() || {};
-  redaktorResult = await runRedaktor(store, { days: 7, maxDrafts: Number(process.env.REDAKTOR_MAX || 6), aiImages: !!cfg.aiImages, log })
-    .catch((e) => ({ checked: 0, drafts: [], skipped: [], duplicates: 0, errors: [e.message] }));
+  redaktorResult = await runRedaktor(store, { days: 7, maxDrafts: Number(process.env.REDAKTOR_MAX || 6), keep: 30, aiImages: !!cfg.aiImages, log })
+    .catch((e) => ({ checked: 0, drafts: [], skipped: [], duplicates: 0, errors: [e.message], pruned: [] }));
   await firestore.collection('redaktor_runs').add({ ...redaktorResult, trigger: build.redaktorRequested ? 'manual' : 'schedule', at: FieldValue.serverTimestamp() });
   log(`redaktor: nowych szkiców ${redaktorResult.drafts.length}, pominiętych ${redaktorResult.skipped.length}, powtórek ${redaktorResult.duplicates}, błędów ${redaktorResult.errors.length}`);
 }
