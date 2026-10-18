@@ -62,6 +62,15 @@ const adsense = settings.adsenseEnabled && settings.adsenseClient ? settings.ads
       <slot />
     </main>
     <Footer />
+    {settings.analyticsId && (
+      <div class="consent" role="dialog" aria-label="Pliki cookies" hidden data-consent>
+        <p>Używamy plików cookies Google Analytics, żeby wiedzieć, które wiadomości czytacie najchętniej. Bez Twojej zgody statystyki działają anonimowo, bez cookies. <a href="/polityka-prywatnosci">Szczegóły</a></p>
+        <div class="consent-b">
+          <button type="button" class="btn ghost" data-consent-no>Tylko niezbędne</button>
+          <button type="button" class="btn red" data-consent-yes>Akceptuję</button>
+        </div>
+      </div>
+    )}
     <button class="to-top" type="button" aria-label="Przewiń do góry" data-top><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
     <script is:inline define:vars={{ adsense, ga: settings.analyticsId || '' }}>
       (function () {
@@ -108,6 +117,22 @@ const adsense = settings.adsenseEnabled && settings.adsenseClient ? settings.ads
           for (var i = 0; i < items.length; i++) { r -= +items[i].dataset.weight || 1; if (r <= 0) { pick = items[i]; break; } }
           [].forEach.call(box.children, function (a) { a.hidden = a !== pick; });
         });
+        // zgoda na statystyki (własny baner; zapamiętana w przeglądarce, zmiana: link „Ustawienia cookies” w stopce)
+        var consent = null;
+        try { consent = localStorage.getItem('ck-consent'); } catch (e) {}
+        var box = document.querySelector('[data-consent]');
+        function choose(v) {
+          consent = v;
+          try { localStorage.setItem('ck-consent', v); } catch (e) {}
+          if (box) box.hidden = true;
+          if (window.gtag) gtag('consent', 'update', { analytics_storage: v === 'yes' ? 'granted' : 'denied' });
+        }
+        if (box) {
+          if (!consent) box.hidden = false;
+          box.querySelector('[data-consent-yes]').addEventListener('click', function () { choose('yes'); });
+          box.querySelector('[data-consent-no]').addEventListener('click', function () { choose('no'); });
+          document.querySelectorAll('[data-cookies]').forEach(function (a) { a.hidden = false; a.addEventListener('click', function (e) { e.preventDefault(); box.hidden = false; }); });
+        }
         // reklamy Google i statystyki ładowane dopiero po pierwszej interakcji – zero wpływu na PageSpeed
         var loaded = false;
         function late() {
@@ -125,7 +150,7 @@ const adsense = settings.adsenseEnabled && settings.adsenseClient ? settings.ads
             window.dataLayer = window.dataLayer || [];
             window.gtag = function () { dataLayer.push(arguments); };
             // RODO: bez zgody (komunikat Google przy reklamach) statystyki nie zapisują plików cookies
-            gtag('consent', 'default', { ad_storage: 'denied', ad_user_data: 'denied', ad_personalization: 'denied', analytics_storage: 'denied', wait_for_update: 500 });
+            gtag('consent', 'default', { ad_storage: 'denied', ad_user_data: 'denied', ad_personalization: 'denied', analytics_storage: consent === 'yes' ? 'granted' : 'denied', wait_for_update: 500 });
             gtag('js', new Date()); gtag('config', ga);
           }
         }

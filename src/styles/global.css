@@ -484,3 +484,16 @@ main {
 .to-top svg {
   transform: rotate(-90deg);
 }
+
+/* baner zgody na statystyki */
+.consent {
+  position: fixed; z-index: 60; left: 16px; right: 16px; bottom: 16px; margin-inline: auto; max-width: 720px;
+  display: flex; align-items: center; gap: 16px 24px; flex-wrap: wrap; padding: 18px 20px;
+  background: var(--navy); color: var(--on-navy-soft); border-radius: var(--r-lg); box-shadow: 0 18px 50px rgb(10 12 30 / 0.35);
+  font-size: 15px; line-height: 1.5;
+}
+.consent[hidden] { display: none; }
+.consent p { flex: 1 1 320px; }
+.consent a { color: #fff; text-decoration: underline; text-underline-offset: 3px; }
+.consent-b { display: flex; gap: 8px; }
+.consent .btn.ghost { color: #fff; border-color: rgb(255 255 255 / 0.35); background: transparent; }
