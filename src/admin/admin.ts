@@ -99,8 +99,34 @@ onAuthStateChanged(auth, async (u: User | null) => {
 });
 
 // ---------------- status publikacji ----------------
-const markDirty = (extra: Record<string, unknown> = {}) =>
-  setDoc(doc(db, 'config', 'build'), { dirty: true, dirtyAt: serverTimestamp(), ...extra }, { merge: true });
+const markDirty = async (extra: Record<string, unknown> = {}) => {
+  await setDoc(doc(db, 'config', 'build'), { dirty: true, dirtyAt: serverTimestamp(), ...extra }, { merge: true });
+  kickPublish();
+};
+// Szybka publikacja: harmonogram GitHuba bywa opóźniony o godziny, więc po zmianie od razu uruchamiamy automat
+// (token GitHuba z uprawnieniem tylko do uruchamiania automatu w tym repozytorium, zapisany w config/github)
+const REPO = 'skubiszewskik-ai/czestokocham-portal';
+let kickTimer = 0;
+let kickedAt = 0;
+function kickPublish() {
+  clearTimeout(kickTimer);
+  kickTimer = window.setTimeout(async () => {
+    try {
+      const token = (await getDoc(doc(db, 'config', 'github'))).data()?.token;
+      if (!token) return;
+      const res = await fetch(`https://api.github.com/repos/${REPO}/actions/workflows/publish.yml/dispatches`, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${token}`, accept: 'application/vnd.github+json', 'x-github-api-version': '2022-11-28' },
+        body: JSON.stringify({ ref: 'main', inputs: { mode: 'build' } }),
+      });
+      if (!res.ok) throw new Error(`GitHub ${res.status}`);
+      kickedAt = Date.now();
+      buildStatus();
+    } catch (err: any) {
+      toast(`Nie udało się uruchomić publikacji od razu (${err.message}) – zrobi to automat według harmonogramu.`, true);
+    }
+  }, 3000);
+}
 async function buildStatus() {
   const b = (await getDoc(doc(db, 'config', 'build'))).data() || {};
   const last = toDate(b.lastBuild);
@@ -108,7 +134,8 @@ async function buildStatus() {
   const el = $('#pub');
   el.classList.toggle('wait', !!wait);
   el.classList.toggle('ok', !wait);
-  el.querySelector('.pub-t')!.textContent = wait ? 'Zmiany czekają na publikację (do 30 min)' : `Strona aktualna${last ? ` · ${fmt(last)}` : ''}`;
+  const kicked = Date.now() - kickedAt < 15 * 60e3;
+  el.querySelector('.pub-t')!.textContent = wait ? (kicked ? 'Publikuję zmiany – zwykle 2–6 minut' : 'Zmiany czekają na publikację') : `Strona aktualna${last ? ` · ${fmt(last)}` : ''}`;
   return b;
 }
 
@@ -674,7 +701,17 @@ async function loadSettings() {
   S('adsTxt').value = s.adsTxt || '';
   S('analyticsId').value = s.analyticsId || '';
   S('admins').value = (admins.data()?.emails || []).join('\n');
+  const gh = (await getDoc(doc(db, 'config', 'github'))).data();
+  S('ghToken').value = '';
+  S('ghToken').placeholder = gh?.token ? 'Token zapisany ✓ – wklej nowy, aby zmienić' : 'github_pat_…';
+  $('#gh-del').hidden = !gh?.token;
 }
+$('#gh-del').addEventListener('click', async () => {
+  if (!(await confirmBox('Usunąć token?', 'Publikacja wróci do harmonogramu GitHuba (może się opóźniać).'))) return;
+  await setDoc(doc(db, 'config', 'github'), { token: null });
+  toast('Token usunięty');
+  loadSettings();
+});
 sf.addEventListener('submit', async (e) => {
   e.preventDefault();
   const emails = S('admins').value.split(/\s+/).map((x) => x.trim().toLowerCase()).filter(Boolean);
@@ -688,9 +725,11 @@ sf.addEventListener('submit', async (e) => {
     await Promise.all([
       setDoc(doc(db, 'config', 'site'), { adsenseEnabled: S('adsenseEnabled').checked, adsenseClient: client, adsenseSlots, adsTxt: S('adsTxt').value.trim(), analyticsId: S('analyticsId').value.trim() }),
       setDoc(doc(db, 'config', 'admins'), { emails }),
+      ...(S('ghToken').value.trim() ? [setDoc(doc(db, 'config', 'github'), { token: S('ghToken').value.trim() })] : []),
     ]);
     await markDirty();
     toast('Ustawienia zapisane – zadziałają po najbliższej publikacji.');
+    loadSettings();
     buildStatus();
   } catch (err: any) { toast(err.message, true); }
 });

@@ -288,6 +288,19 @@ const ic = (k: keyof typeof I) => `<svg viewBox="0 0 24 24" width="20" height="2
                   <label>Google Analytics 4<input name="analyticsId" placeholder="G-XXXXXXX" /></label>
                 </div>
                 <div class="card">
+                  <h2 class="ch">Szybka publikacja</h2>
+                  <p class="hint">Bez tego zmiany czekają na harmonogram GitHuba, który potrafi spóźniać się o kilka godzin. Z tokenem każda zmiana w panelu od razu uruchamia publikację (2–6 minut).</p>
+                  <ol class="steps">
+                    <li>Otwórz <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">github.com → nowy token (fine-grained)</a>.</li>
+                    <li>Nazwa: „Częstokocham panel”, ważność: 1 rok.</li>
+                    <li>Repository access: <strong>Only select repositories</strong> → <em>czestokocham-portal</em>.</li>
+                    <li>Permissions → Repository → <strong>Actions: Read and write</strong> (nic więcej).</li>
+                    <li>Kliknij „Generate token”, skopiuj i wklej poniżej.</li>
+                  </ol>
+                  <label>Token GitHub<input name="ghToken" type="password" autocomplete="off" placeholder="github_pat_…" /></label>
+                  <button type="button" class="btn ghost danger" id="gh-del" hidden>Usuń token</button>
+                </div>
+                <div class="card">
                   <h2 class="ch">Dostęp do panelu</h2>
                   <label>Adresy e-mail Google, po jednym w linii<textarea name="admins" rows="5"></textarea></label>
                 </div>
@@ -554,6 +567,8 @@ const ic = (k: keyof typeof I) => `<svg viewBox="0 0 24 24" width="20" height="2
   .ai-note p { font-size: 14px; color: var(--ink-2); }
   .ai-note a { color: var(--red-ink); text-decoration: underline; word-break: break-word; }
   @media (max-width: 640px) { .rcard { grid-template-columns: 1fr; } }
+  .steps { list-style: decimal; padding-left: 1.2em; font-size: 14px; color: var(--ink-2); display: grid; gap: 4px; }
+  .steps a { color: var(--red-ink); text-decoration: underline; }
   .import-hero { display: flex; align-items: center; gap: 20px; }
   .import-hero h2 { font-size: 20px; margin-bottom: 6px; }
   .import-hero p { color: var(--ink-2); max-width: 70ch; }
