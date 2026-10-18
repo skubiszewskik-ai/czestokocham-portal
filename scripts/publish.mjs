@@ -39,7 +39,9 @@ if (args.has('--import') || build.importRequested) {
     },
     saveArticle: (id, doc) => firestore.collection('articles').doc(id).set({ ...doc, updatedAt: FieldValue.serverTimestamp() }),
     recent: async (since) =>
-      (await firestore.collection('articles').where('publishedAt', '>=', since).select('keywords').get()).docs.map((d) => ({ slug: d.id, keywords: d.get('keywords') })),
+      (await firestore.collection('articles').where('publishedAt', '>=', since).select('title', 'lead', 'body', 'source', 'status').get())
+        .docs.map((d) => ({ slug: d.id, ...d.data() })),
+    hide: (id, duplicateOf) => firestore.collection('articles').doc(id).update({ status: 'draft', duplicateOf, updatedAt: FieldValue.serverTimestamp() }),
   };
   importResult = { checked: 0, imported: [], skipped: 0, errors: [] };
   const sources = [
