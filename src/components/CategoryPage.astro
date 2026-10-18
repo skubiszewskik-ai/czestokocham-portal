@@ -23,7 +23,10 @@ const first = page === 1 ? list.find((a) => a.cover) : undefined;
 const pair = page === 1 ? list.filter((a) => a.cover && a.id !== first?.id).slice(0, 2) : [];
 const used = new Set([first?.id, ...pair.map((a) => a.id)]);
 const rows = list.filter((a) => !used.has(a.id));
-const others = latest({ limit: 6 }).filter((a) => a.category !== kategoria).slice(0, 5);
+const pool = latest({ limit: 16 }).filter((a) => a.category !== kategoria);
+// mało wiadomości w dziale → lewą kolumnę uzupełniamy najnowszymi z innych działów (zamiast pustego miejsca)
+const fill = page === 1 && rows.length < 6 ? pool.slice(0, 8 - rows.length) : [];
+const others = fill.length ? [] : pool.slice(0, 5);
 ---
 <Base title={page > 1 ? `${cat.title} – strona ${page}` : cat.title} description={cat.lede} settings={settings} active={kategoria} noindex={page > 1}>
   <section class="wrap c-head" style={`--c:${cat.color}`}>
@@ -38,28 +41,34 @@ const others = latest({ limit: 6 }).filter((a) => a.category !== kategoria).slic
   </section>
 
   {first && (
-    <section class="wrap c-top">
+    <section class:list={['wrap c-top', { solo: pair.length === 0 }]}>
       <a class="c-lead" href={articleUrl(first)}>
         <span class="ph c-lead-pic"><Pic img={first.cover} sizes="(max-width: 900px) 100vw, 760px" eager alt="" /></span>
         <span class="card-meta"><Tag cat={first.category} /><When d={first.publishedAt} /></span>
         <h2 class="c-lead-t">{first.title}</h2>
         {first.lead && <p class="c-lead-l">{first.lead}</p>}
       </a>
-      <div class="c-pair">{pair.map((a, i) => <Card a={a} i={i} level="h2" sizes="(max-width: 900px) 50vw, 420px" />)}</div>
+      {pair.length > 0 && <div class="c-pair">{pair.map((a, i) => <Card a={a} i={i} level="h2" sizes="(max-width: 900px) 50vw, 420px" />)}</div>}
     </section>
   )}
 
-  <div class="wrap section"><AdSlot slot="billboard" ads={ads} settings={settings} house /></div>
+  {list.length > 0 && <div class="wrap section"><AdSlot slot="billboard" ads={ads} settings={settings} house /></div>}
 
   <section class="wrap section c-body" aria-label="Wiadomości">
     <div>
-      {list.length === 0 && <p class="lead empty">W tym dziale nie ma jeszcze wiadomości. Zajrzyj na <a class="link" href="/">stronę główną</a>.</p>}
+      {list.length === 0 && <p class="empty">W tym dziale nie ma jeszcze wiadomości. Poniżej najnowsze z innych działów.</p>}
       {rows.map((a, i) => (
         <>
           <Row a={a} level="h2" />
           {i === 5 && <div class="inl"><AdSlot slot="list-inline" ads={ads} settings={settings} /></div>}
         </>
       ))}
+      {fill.length > 0 && (
+        <>
+          <h2 class="fill-h">{list.length ? 'Więcej z innych działów' : 'Najnowsze wiadomości'}</h2>
+          {fill.map((a) => <Row a={a} level="h3" />)}
+        </>
+      )}
       <nav class="pager" aria-label="Strony">
         {page > 1 && <a class="btn ghost" href={pageUrl(kategoria, page - 1)}>Nowsze</a>}
         {hasNext && <a class="btn" href={pageUrl(kategoria, page + 1)}>Starsze wiadomości <Icon name="arrow" /></a>}
@@ -92,16 +101,25 @@ const others = latest({ limit: 6 }).filter((a) => a.category !== kategoria).slic
   .c-lead-l { font-size: 17px; color: var(--ink-2); max-width: 64ch; }
   .c-lead:hover .c-lead-t { color: var(--red-ink); }
   .c-lead:hover .c-lead-pic :global(img) { transform: scale(1.03); }
+  /* jeden artykuł z dużym zdjęciem: zdjęcie obok tekstu zamiast pustej prawej kolumny */
+  .c-top.solo { grid-template-columns: 1fr; }
+  .solo .c-lead { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); grid-template-rows: 1fr auto auto 1fr; column-gap: clamp(24px, 3vw, 48px); row-gap: 12px; }
+  .solo .c-lead-pic { grid-column: 1; grid-row: 1 / -1; }
+  .solo .card-meta { grid-column: 2; grid-row: 2; }
+  .solo .c-lead-t { grid-column: 2; grid-row: 3; }
+  .solo .c-lead-l { grid-column: 2; grid-row: 4; align-self: start; }
   .c-pair { display: grid; gap: var(--gap); align-content: start; }
   .c-body { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 48px; align-items: start; }
   .inl { padding: 24px 0; }
-  .empty { padding: 40px 0; }
+  .empty { padding: 18px 22px; border-radius: var(--r-md); background: var(--paper); color: var(--ink-2); margin-bottom: 8px; }
+  .fill-h { font-size: 22px; font-weight: 800; letter-spacing: -0.01em; padding: 8px 0 4px; }
+  .empty + .fill-h { padding-top: 24px; }
   .pager { display: flex; gap: 10px; justify-content: flex-start; margin-top: 32px; }
   .side-sticky { position: sticky; top: 100px; display: grid; gap: 32px; }
   .side-box { background: var(--paper); border-radius: var(--r-lg); padding: 8px 20px 4px; }
   .side-h { font-size: 18px; font-weight: 800; padding: 14px 0 4px; }
   .side-box :global(.row:last-child) { border-bottom: 0; }
   @media (max-width: 1100px) { .c-body { grid-template-columns: 1fr; } .c-side { display: none; } }
-  @media (max-width: 900px) { .c-top { grid-template-columns: 1fr; } .c-pair { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 900px) { .c-top { grid-template-columns: 1fr; } .solo .c-lead { display: flex; } .c-pair { grid-template-columns: 1fr 1fr; } }
   @media (max-width: 760px) { .c-pair :global(.card-t) { font-size: 16px; } }
 </style>
