@@ -1,5 +1,5 @@
 # Automat Częstokocham (darmowy): co 30 minut sprawdza panel, a po 15:00 (czas polski) pobiera aktualności
-# z czestochowa.pl i wczestochowie.pl, buduje stronę i wdraża ją na Firebase Hosting (plan Spark).
+# z czestochowa.pl i wczestochowie.pl, co 2 godziny (7–21) uruchamia wirtualnego redaktora (szkice do akceptu), buduje stronę i wdraża ją na Firebase Hosting (plan Spark).
 name: Publikacja
 
 on:
@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: 'build albo import'
+        description: 'build, import albo redaktor'
         default: build
 
 concurrency:
@@ -36,6 +36,7 @@ jobs:
         run: node scripts/check.mjs
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          REDAKTOR_ON: ${{ secrets.GEMINI_API_KEY != '' || secrets.GROQ_API_KEY != '' }}
 
   publish:
     needs: check
@@ -54,8 +55,10 @@ jobs:
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
       - name: Import, build i wdrożenie
-        run: node scripts/publish.mjs ${{ (needs.check.outputs.run == 'import' || inputs.mode == 'import') && '--import' || '' }}
+        run: node scripts/publish.mjs ${{ (needs.check.outputs.run == 'import' || inputs.mode == 'import') && '--import' || '' }} ${{ (needs.check.outputs.run == 'redaktor' || inputs.mode == 'redaktor') && '--redaktor' || '' }}
         env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/sa.json
           ADMIN_EMAILS: skubiszewskik@gmail.com,czestokocham@gmail.com

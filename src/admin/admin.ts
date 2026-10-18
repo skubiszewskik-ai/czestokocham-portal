@@ -1,4 +1,4 @@
-// Panel redakcji Częstokocham – logowanie Google, pulpit, artykuły, banery, import, ustawienia
+// Panel redakcji Częstokocham – logowanie Google, pulpit, artykuły, banery, redaktor AI, import, ustawienia
 import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut, type User } from 'firebase/auth';
 import {
@@ -46,7 +46,7 @@ function confirmBox(title: string, text: string, yes = 'Usuń'): Promise<boolean
 const tagHtml = (cat: string) => { const c = cats[cat]; return c ? `<span class="pill" style="background:color-mix(in srgb, ${c.color} 12%, #fff);color:color-mix(in srgb, ${c.color} 76%, #000)">${c.name}</span>` : ''; };
 
 // ---------------- widoki ----------------
-const TITLES: Record<string, string> = { dashboard: 'Pulpit', articles: 'Artykuły', editor: 'Artykuł', ads: 'Banery', import: 'Import', settings: 'Ustawienia' };
+const TITLES: Record<string, string> = { dashboard: 'Pulpit', articles: 'Artykuły', editor: 'Artykuł', ads: 'Banery', redaktor: 'Redaktor AI', import: 'Import', settings: 'Ustawienia' };
 const views = Object.keys(TITLES);
 function show(v: string) {
   views.forEach((x) => ($(`#v-${x}`).hidden = x !== v));
@@ -58,7 +58,9 @@ function show(v: string) {
   if (v === 'dashboard') loadDashboard();
   if (v === 'articles') loadArticles(true);
   if (v === 'ads') loadAds();
+  if (v === 'redaktor') loadRedaktor();
   if (v === 'import') loadImports();
+  redCount().catch(() => {});
   if (v === 'settings') loadSettings();
 }
 $$('.side-nav button').forEach((b) => b.addEventListener('click', () => show(b.dataset.tab!)));
@@ -191,7 +193,7 @@ const slugify = (s: string) => normalizeWord(s).replace(/[^a-z0-9]+/g, '-').repl
 // ---------------- wiersz artykułu ----------------
 function rowHtml(id: string, d: any) {
   const img = d.cover?.srcset?.[0]?.url;
-  const status = d.status === 'published' ? '<span class="pill on">Opublikowany</span>' : '<span class="pill off">Szkic</span>';
+  const status = (d.origin === 'redaktor' ? '<span class="pill ai">AI</span>' : '') + (d.status === 'published' ? '<span class="pill on">Opublikowany</span>' : '<span class="pill off">Szkic</span>');
   return `<button class="arow" data-id="${esc(id)}" type="button">
     <span class="arow-img" style="${img ? `background-image:url('${esc(src(img))}')` : ''}"></span>
     <span><span class="arow-t">${esc(d.title || '(bez tytułu)')}</span>
@@ -283,6 +285,13 @@ async function openEditor(id: string | null) {
   F('sourceUrl').value = d.source?.url || '';
   F('coverAlt').value = d.cover?.alt || '';
   $('#rte').innerHTML = d.body || '';
+  const ai = d.origin === 'redaktor' && d.basedOn;
+  $('#e-ai').hidden = !ai;
+  if (ai) {
+    const also = (d.basedOn.alsoIn || []).map((x: any) => `<a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.name)}</a>`).join(', ');
+    $('#e-ai-t').innerHTML = `Napisany na podstawie: <a href="${esc(d.basedOn.url)}" target="_blank" rel="noopener">${esc(d.basedOn.title || d.basedOn.name)}</a> (${esc(d.basedOn.name)})${also ? `. Ten sam temat także: ${also}` : ''}.<br>Zdjęcie: ${esc(IMG_SRC[d.imageSource] || '—')}${d.imagePage ? ` (<a href="${esc(d.imagePage)}" target="_blank" rel="noopener">licencja</a>)` : ''}. ${d.source ? 'Pod artykułem pojawi się źródło, bo to własny materiał portalu.' : 'Bez dopisku źródła (komunikat instytucji lub wydarzenie).'} Sprawdź fakty przed publikacją.`;
+  }
+  $('#e-approve').hidden = !ai || d.status !== 'draft';
   current.cover = d.cover || null;
   current.gallery = d.gallery || [];
   renderCover(); renderGallery(); updateView();
@@ -297,7 +306,13 @@ function updateView() {
 }
 F('title').addEventListener('input', () => { grow(); if (!current.id) F('slug').value = slugify(F('title').value); });
 F('category').addEventListener('change', () => ($('#slug-cat').textContent = F('category').value));
-$('#e-back').addEventListener('click', () => show('articles'));
+$('#e-back').addEventListener('click', () => show(current.data.origin === 'redaktor' && current.data.status === 'draft' ? 'redaktor' : 'articles'));
+$('#e-approve').addEventListener('click', () => {
+  F('status').value = 'published';
+  F('publishedAt').value = localInput(new Date());
+  $('#e-approve').hidden = true;
+  form.requestSubmit();
+});
 
 function renderCover() {
   const c = current.cover;
@@ -520,6 +535,113 @@ $('#ad-del').addEventListener('click', async () => {
   drawer(false);
   toast('Baner usunięty');
   loadAds();
+});
+
+// ---------------- redaktor AI ----------------
+const IMG_SRC: Record<string, string> = { bank: 'bank zdjęć redakcji', wikimedia: 'Wikimedia Commons', ai: 'ilustracja AI', plansza: 'plansza z tytułem' };
+async function redCount() {
+  const snap = await getDocs(query(collection(db, 'articles'), where('origin', '==', 'redaktor'), where('status', '==', 'draft')));
+  $('#red-n').textContent = String(snap.size);
+  $('#red-n').hidden = !snap.size;
+  return snap;
+}
+async function loadRedaktor() {
+  const [drafts, runs, cfg, photos] = await Promise.all([
+    redCount(),
+    getDocs(query(collection(db, 'redaktor_runs'), orderBy('at', 'desc'), limit(20))),
+    getDoc(doc(db, 'config', 'redaktor')),
+    getDocs(collection(db, 'photos')),
+  ]);
+  ($('#red-ai') as HTMLInputElement).checked = !!cfg.data()?.aiImages;
+  const list = drafts.docs.map((d) => ({ id: d.id, d: d.data() as any })).sort((a, b) => +(toDate(b.d.publishedAt) || 0) - +(toDate(a.d.publishedAt) || 0));
+  $('#red-count').textContent = list.length ? `${list.length} do przejrzenia` : '';
+  $('#red-list').innerHTML = list.map(({ id, d }) => {
+    const img = d.cover?.srcset?.[Math.min(1, (d.cover?.srcset?.length || 1) - 1)]?.url;
+    return `<div class="rcard" data-rid="${esc(id)}">
+      <span class="rcard-img" style="${img ? `background-image:url('${esc(src(img))}')` : ''}"></span>
+      <div class="rcard-b">
+        <span class="rcard-m">${tagHtml(d.category)}<span>${fmt(toDate(d.publishedAt))}</span><span>· na podstawie <a href="${esc(d.basedOn?.url)}" target="_blank" rel="noopener">${esc(d.basedOn?.name)}</a></span><span>· zdjęcie: ${esc(IMG_SRC[d.imageSource] || '—')}</span></span>
+        <span class="rcard-t">${esc(d.title)}</span>
+        <span class="rcard-l">${esc(d.lead)}</span>
+        <span class="rcard-a">
+          <button class="btn ghost" data-act="open" type="button">Edytuj</button>
+          <button class="btn red" data-act="pub" type="button">Opublikuj</button>
+          <button class="btn ghost danger" data-act="rej" type="button">Odrzuć</button>
+        </span>
+      </div>
+    </div>`;
+  }).join('');
+  $$('#red-list [data-act]').forEach((b) => b.addEventListener('click', async () => {
+    const id = b.closest<HTMLElement>('[data-rid]')!.dataset.rid!;
+    const act = b.dataset.act;
+    if (act === 'open') return openEditor(id);
+    try {
+      if (act === 'pub') {
+        await updateDoc(doc(db, 'articles', id), { status: 'published', publishedAt: Timestamp.now(), updatedAt: serverTimestamp() });
+        toast('Opublikowano – pojawi się na stronie w ciągu ok. 30 minut.');
+      } else {
+        if (!(await confirmBox('Odrzucić szkic?', 'Szkic zniknie z listy, a redaktor nie wróci do tego tematu.', 'Odrzuć'))) return;
+        await updateDoc(doc(db, 'articles', id), { status: 'deleted', updatedAt: serverTimestamp() });
+        toast('Szkic odrzucony');
+      }
+      await markDirty();
+      loadRedaktor();
+      buildStatus();
+    } catch (err: any) { toast(err.message, true); }
+  }));
+  $('#red-hist').innerHTML = runs.docs.map((r) => {
+    const x = r.data();
+    const err = (x.errors || []).length;
+    const sk = (x.skipped || []).length;
+    return `<tr><td>${fmt(toDate(x.at))}${x.trigger === 'manual' ? ' · ręcznie' : ''}</td><td>${x.checked ?? 0}</td><td><strong>${(x.drafts || []).length}</strong></td><td>${sk ? `<span title="${esc((x.skipped || []).join('\n'))}">${sk}</span>` : '0'}</td><td>${x.duplicates ?? 0}</td><td>${err ? `<span class="pill off" title="${esc((x.errors || []).join('; '))}">${err}</span>` : '—'}</td></tr>`;
+  }).join('') || '<tr><td colspan="6">Redaktor jeszcze nie pracował.</td></tr>';
+  const last = runs.docs[0]?.data();
+  $('#red-last').textContent = last
+    ? `Ostatnie uruchomienie: ${fmt(toDate(last.at))} – nowe szkice: ${(last.drafts || []).length}${(last.errors || []).length ? `, problem: ${(last.errors || [])[0]}` : ''}`
+    : 'Redaktor jeszcze nie pracował.';
+  renderBank(photos.docs.map((p) => ({ id: p.id, ...(p.data() as any) })));
+}
+function renderBank(items: any[]) {
+  $('#bank-n').textContent = items.length ? `${items.length} zdj.` : '';
+  $('#bank').innerHTML = items.map((p) => `<figure><img src="${esc(src(p.image?.srcset?.[1]?.url || p.image?.srcset?.[0]?.url || ''))}" alt="" loading="lazy"><figcaption>${esc((p.tags || []).join(', '))}${p.credit ? `<br><small>Fot. ${esc(p.credit)}</small>` : ''}</figcaption><button type="button" data-pid="${esc(p.id)}" aria-label="Usuń zdjęcie">×</button></figure>`).join('');
+  $$('#bank [data-pid]').forEach((b) => b.addEventListener('click', async () => {
+    if (!(await confirmBox('Usunąć zdjęcie z banku?', 'Artykuły, które już go używają, zachowają zdjęcie.'))) return;
+    await deleteDoc(doc(db, 'photos', b.dataset.pid!));
+    loadRedaktor();
+  }));
+}
+$('#bank-in').addEventListener('change', async (e) => {
+  const files = [...((e.target as HTMLInputElement).files || [])];
+  const tags = ($('#bank-tags') as HTMLInputElement).value.split(',').map((t) => t.trim()).filter(Boolean);
+  if (!files.length) return;
+  if (!tags.length) { toast('Najpierw wpisz słowa kluczowe – po nich redaktor dobiera zdjęcia.', true); (e.target as HTMLInputElement).value = ''; return; }
+  busy('#bank-in', true);
+  let ok = 0;
+  for (const [i, file] of files.entries()) {
+    $('#bank-n').textContent = `Przetwarzam ${i + 1} z ${files.length}…`;
+    try {
+      const image = await uploadPhoto(file, 'bank', tags.join(', '), COVER_W);
+      await setDoc(doc(collection(db, 'photos')), { tags, credit: ($('#bank-credit') as HTMLInputElement).value.trim() || null, image, createdAt: serverTimestamp() });
+      ok++;
+    } catch (err: any) { toast(err.message, true); break; }
+  }
+  busy('#bank-in', false);
+  (e.target as HTMLInputElement).value = '';
+  if (ok) { await markDirty(); toast(`Dodano do banku: ${ok}`); }
+  loadRedaktor();
+});
+$('#red-ai').addEventListener('change', async (e) => {
+  try {
+    await setDoc(doc(db, 'config', 'redaktor'), { aiImages: (e.target as HTMLInputElement).checked }, { merge: true });
+    toast((e.target as HTMLInputElement).checked ? 'Ilustracje AI włączone' : 'Ilustracje AI wyłączone');
+  } catch (err: any) { toast(err.message, true); }
+});
+$('#red-run').addEventListener('click', async () => {
+  try {
+    await markDirty({ redaktorRequested: true });
+    toast('Zlecono pracę redaktora – szkice pojawią się tu w ciągu ok. 30–40 minut.');
+    buildStatus();
+  } catch (err: any) { toast(err.message, true); }
 });
 
 // ---------------- import ----------------

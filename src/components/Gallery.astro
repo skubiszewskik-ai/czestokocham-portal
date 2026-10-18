@@ -30,7 +30,7 @@ const data = images.map((g) => ({ src: big(g), w: g.w, h: g.h, t: small(g) }));
 <dialog class="lb" aria-label={`Galeria: ${title}`} data-lb>
   <div class="lb-top">
     <span class="lb-count num" data-count>1 / {images.length}</span>
-    <span class="lb-cap">{credit ? `Fot. ${credit}` : ''}</span>
+    <span class="lb-cap">{credit || ''}</span>
     <button class="lb-btn" type="button" data-close aria-label="Zamknij"><Icon name="close" /></button>
   </div>
   <div class="lb-stage" data-stage>

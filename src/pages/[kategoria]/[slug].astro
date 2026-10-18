@@ -58,6 +58,8 @@ const preload = cover?.srcset?.length
 const share = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`;
 const n = article.gallery.length;
 const credit = article.photoCredit?.replace(/^fot\.\s*/i, '');
+// „Fot.” tylko przy zdjęciach – nie przy ilustracjach i grafikach
+const creditLabel = credit && (/^(ilustracja|grafika)/i.test(credit) ? credit : `Fot. ${credit}`);
 ---
 <Base title={article.title} description={article.lead || cat.lede} image={coverBig} type="article" settings={settings} active={article.category} jsonld={jsonld} preload={preload}>
   <article class="wrap art">
@@ -83,7 +85,7 @@ const credit = article.photoCredit?.replace(/^fot\.\s*/i, '');
       {cover && (
         <figure class="art-cover">
           <button class="ph shutter cover-btn" type="button" data-cover-open aria-label="Powiększ zdjęcie"><Pic img={cover} sizes="(max-width: 900px) 100vw, 860px" eager />{n > 0 && <span class="cover-n num"><Icon name="camera" /> {n + 1} zdjęć</span>}</button>
-          {credit && <figcaption class="small soft"><Icon name="camera" class="i-inline" /> Fot. {credit}</figcaption>}
+          {credit && <figcaption class="small soft"><Icon name="camera" class="i-inline" /> {creditLabel}</figcaption>}
         </figure>
       )}
 
@@ -91,7 +93,7 @@ const credit = article.photoCredit?.replace(/^fot\.\s*/i, '');
       {bodyB && <div class="inline-ad"><AdSlot slot="article-inline" ads={ads} settings={settings} /></div>}
       {bodyB && <div class="body" set:html={bodyB} />}
 
-      {cover && <Gallery images={[cover, ...article.gallery]} credit={credit} title={article.title} />}
+      {cover && <Gallery images={[cover, ...article.gallery]} credit={creditLabel} title={article.title} />}
 
       {article.source && (
         <aside class="source">

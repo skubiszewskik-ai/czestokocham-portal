@@ -20,6 +20,8 @@ const I = {
   bolt: '<path d="M13 3 5 14h6l-1 7 8-11h-6z"/>',
   menu: '<path d="M4 7h16M4 12h16M4 17h16"/>',
   close: '<path d="M6 6l12 12M18 6 6 18"/>',
+  spark: '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/>',
+  check: '<path d="M5 12.5 10 17l9-10"/>',
 };
 const ic = (k: keyof typeof I) => `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${I[k]}</svg>`;
 ---
@@ -42,6 +44,7 @@ const ic = (k: keyof typeof I) => `<svg viewBox="0 0 24 24" width="20" height="2
           <li>Artykuły z edytorem i galerią zdjęć</li>
           <li>Banery reklamowe z kontrolą wymiarów</li>
           <li>Automatyczny import z czestochowa.pl i wczestochowie.pl o 15:00</li>
+          <li>Wirtualny redaktor – szkice z lokalnych portali do akceptu</li>
         </ul>
       </div>
       <div class="login-box">
@@ -66,6 +69,7 @@ const ic = (k: keyof typeof I) => `<svg viewBox="0 0 24 24" width="20" height="2
           <button data-tab="dashboard" aria-current="true"><Fragment set:html={ic('home')} /> Pulpit</button>
           <button data-tab="articles"><Fragment set:html={ic('doc')} /> Artykuły</button>
           <button data-tab="ads"><Fragment set:html={ic('ad')} /> Banery</button>
+          <button data-tab="redaktor"><Fragment set:html={ic('spark')} /> Redaktor AI <span class="nav-n" id="red-n" hidden></span></button>
           <button data-tab="import"><Fragment set:html={ic('sync')} /> Import</button>
           <button data-tab="settings"><Fragment set:html={ic('cog')} /> Ustawienia</button>
         </nav>
@@ -163,6 +167,11 @@ const ic = (k: keyof typeof I) => `<svg viewBox="0 0 24 24" width="20" height="2
                   </div>
                 </div>
                 <div class="ecol side-col">
+                  <div class="card ai-note" id="e-ai" hidden>
+                    <h2 class="ch"><Fragment set:html={ic('spark')} /> Szkic redaktora AI</h2>
+                    <p id="e-ai-t"></p>
+                    <button type="button" class="btn red wide" id="e-approve"><Fragment set:html={ic('check')} /> Zatwierdź i opublikuj</button>
+                  </div>
                   <div class="card">
                     <h2 class="ch">Publikacja</h2>
                     <label>Status<select name="status"><option value="published">Opublikowany</option><option value="draft">Szkic</option></select></label>
@@ -218,6 +227,46 @@ const ic = (k: keyof typeof I) => `<svg viewBox="0 0 24 24" width="20" height="2
             <div class="card flush">
               <div class="card-h pad"><h2>Historia</h2></div>
               <table class="tbl"><thead><tr><th>Kiedy</th><th>Uruchomienie</th><th>Sprawdzono</th><th>Nowe</th><th>Błędy</th></tr></thead><tbody id="imp-list"></tbody></table>
+            </div>
+          </section>
+
+          <!-- REDAKTOR AI -->
+          <section id="v-redaktor" class="view" hidden>
+            <div class="card import-hero">
+              <span class="qa-i violet big"><Fragment set:html={ic('spark')} /></span>
+              <div class="grow">
+                <h2>Wirtualny redaktor</h2>
+                <p>Co 2 godziny (7:00–21:00) sprawdza lokalne portale. Z nowych tematów pisze <strong>własne teksty</strong> na podstawie faktów i zostawia je tutaj jako szkice. Nic nie trafia na stronę bez Twojej akceptacji. Pomija reklamy, tematy spoza regionu i wiadomości, które już mamy (np. z czestochowa.pl). Zdjęć konkurencji nie używa: bierze zdjęcie z banku poniżej, z Wikimedia Commons (z podpisem autora) albo robi planszę z tytułem.</p>
+                <p class="hint" id="red-last">Ostatnie uruchomienie: –</p>
+              </div>
+              <button id="red-run" class="btn red"><Fragment set:html={ic('bolt')} /> Uruchom teraz</button>
+            </div>
+
+            <div class="card flush">
+              <div class="card-h pad"><h2>Szkice do akceptu</h2><span class="hint" id="red-count"></span></div>
+              <div id="red-list" class="rlist"></div>
+            </div>
+
+            <div class="card">
+              <div class="card-h"><h2>Bank zdjęć redakcji</h2><span class="hint" id="bank-n"></span></div>
+              <p class="hint">Wgraj własne lub kupione zdjęcia i opisz je słowami kluczowymi (np. <em>Raków, stadion, piłka nożna</em> albo <em>policja, radiowóz</em>). Redaktor dobierze zdjęcie, którego słowa najlepiej pasują do tematu.</p>
+              <div class="grid2">
+                <label>Słowa kluczowe (po przecinku)<input id="bank-tags" placeholder="np. MPK, tramwaj, komunikacja" /></label>
+                <label>Autor / źródło zdjęcia<input id="bank-credit" placeholder="np. Redakcja Częstokocham" /></label>
+              </div>
+              <label class="drop" data-drop="bank"><Fragment set:html={ic('img')} /><span><strong>Przeciągnij zdjęcia</strong> albo kliknij, aby wybrać</span><small>Wszystkie wybrane zdjęcia dostaną powyższe słowa kluczowe</small><input id="bank-in" type="file" accept="image/*" multiple /></label>
+              <div id="bank" class="bank"></div>
+            </div>
+
+            <div class="card">
+              <h2 class="ch">Ilustracje AI</h2>
+              <label class="switch"><input id="red-ai" type="checkbox" /><span class="sw"></span> Twórz ilustracje AI, gdy brak zdjęcia w banku i w Wikimedia</label>
+              <p class="hint">Darmowa usługa Pollinations: obraz ma w rogu logo pollinations.ai, usługa może przestać działać bez uprzedzenia, a jej regulamin każe samodzielnie sprawdzić licencję modelu przed użyciem komercyjnym. Przy wyłączonej opcji redaktor zrobi planszę z tytułem.</p>
+            </div>
+
+            <div class="card flush">
+              <div class="card-h pad"><h2>Historia</h2></div>
+              <table class="tbl"><thead><tr><th>Kiedy</th><th>Nowych wpisów</th><th>Szkice</th><th>Pominięte</th><th>Powtórki</th><th>Błędy</th></tr></thead><tbody id="red-hist"></tbody></table>
             </div>
           </section>
 
@@ -480,6 +529,31 @@ const ic = (k: keyof typeof I) => `<svg viewBox="0 0 24 24" width="20" height="2
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 
   /* import, ustawienia */
+  .qa-i.violet { background: #6d3bd6; }
+  .nav-n { margin-left: auto; min-width: 22px; height: 22px; padding: 0 7px; border-radius: 999px; background: var(--red); color: #fff; font-size: 12px; font-weight: 800; display: inline-grid; place-items: center; }
+  .rlist:empty::after { content: 'Brak szkiców do akceptu.'; display: block; padding: 40px; text-align: center; color: var(--ink-soft); }
+  .rcard { display: grid; grid-template-columns: 168px minmax(0, 1fr); gap: 18px; padding: 18px 22px; border-top: 1px solid #eef0f4; }
+  .rcard-img { aspect-ratio: 16 / 10; border-radius: 12px; background: #e7e9ef center / cover no-repeat; }
+  .rcard-b { display: grid; gap: 6px; align-content: start; }
+  .rcard-t { font-weight: 750; font-size: 16.5px; line-height: 1.3; }
+  .rcard-l { color: var(--ink-2); font-size: 14.5px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .rcard-m { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 13px; color: var(--ink-soft); }
+  .rcard-m a { color: var(--red-ink); text-decoration: underline; }
+  .rcard-a { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+  .rcard-a .btn { min-height: 38px; font-size: 14px; }
+  .pill.ai { background: #ede5fb; color: #4c1d95; }
+  .bank { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
+  .bank figure { position: relative; border-radius: 12px; overflow: hidden; background: #eef0f4; }
+  .bank img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; display: block; }
+  .bank figcaption { padding: 8px 10px; font-size: 12.5px; color: var(--ink-2); background: #fff; border: 1px solid #eef0f4; border-top: 0; border-radius: 0 0 12px 12px; }
+  .bank button { position: absolute; top: 6px; right: 6px; border: 0; background: rgb(17 19 38 / 0.8); color: #fff; cursor: pointer; width: 28px; height: 28px; border-radius: 8px; font-size: 16px; }
+  .bank button:hover { background: var(--red); }
+  .ai-note { background: #f6f1fe; }
+  .ai-note .ch { display: flex; align-items: center; gap: 8px; color: #4c1d95; }
+  .ai-note .ch svg { width: 18px; height: 18px; }
+  .ai-note p { font-size: 14px; color: var(--ink-2); }
+  .ai-note a { color: var(--red-ink); text-decoration: underline; word-break: break-word; }
+  @media (max-width: 640px) { .rcard { grid-template-columns: 1fr; } }
   .import-hero { display: flex; align-items: center; gap: 20px; }
   .import-hero h2 { font-size: 20px; margin-bottom: 6px; }
   .import-hero p { color: var(--ink-2); max-width: 70ch; }

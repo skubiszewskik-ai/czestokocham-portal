@@ -1,11 +1,12 @@
-// Publikacja portalu: (import z czestochowa.pl i wczestochowie.pl) → zdjęcia z panelu → zmiany z bazy → build Astro → Firebase Hosting
-// Użycie: node scripts/publish.mjs [--import] [--no-deploy]
+// Publikacja portalu: (import z czestochowa.pl i wczestochowie.pl) → (wirtualny redaktor) → zdjęcia z panelu → zmiany z bazy → build Astro → Firebase Hosting
+// Użycie: node scripts/publish.mjs [--import] [--redaktor] [--no-deploy]
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { execSync } from 'node:child_process';
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { db, warsawNow } from '../lib/firestore.js';
 import { importLatest, importWczestochowie } from '../lib/importer.js';
+import { runRedaktor } from '../lib/redaktor.js';
 
 const args = new Set(process.argv.slice(2));
 const firestore = db();
@@ -13,6 +14,7 @@ const MEDIA = 'public/media';
 const SNAP = 'data/articles.json';
 const t0 = Date.now();
 const log = (m) => console.log(`[${((Date.now() - t0) / 1000).toFixed(1)}s] ${m}`);
+const plainTs = (o) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, v && typeof v.toDate === 'function' ? v.toDate() : v]));
 
 const buildRef = firestore.collection('config').doc('build');
 const build = (await buildRef.get()).data() || {};
@@ -59,6 +61,45 @@ if (args.has('--import') || build.importRequested) {
   }
   await firestore.collection('imports').add({ ...importResult, trigger: build.importRequested ? 'manual' : 'schedule', at: FieldValue.serverTimestamp() });
   log(`import: nowych ${importResult.imported.length}, błędów ${importResult.errors.length}`);
+}
+
+// 1b. wirtualny redaktor – szkice na podstawie innych portali (do akceptu w panelu)
+let redaktorResult = null;
+if (args.has('--redaktor') || build.redaktorRequested) {
+  log('wirtualny redaktor…');
+  const seenCol = firestore.collection('redaktor_seen');
+  const store = {
+    recent: async (since) =>
+      (await firestore.collection('articles').where('publishedAt', '>=', since).select('title', 'lead', 'body', 'status').get())
+        .docs.map((d) => ({ slug: d.id, ...d.data() })).sort((a, b) => (a.status === 'deleted') - (b.status === 'deleted')),
+    seen: async (keys) => {
+      const out = new Set();
+      for (let i = 0; i < keys.length; i += 100) {
+        const docs = await firestore.getAll(...keys.slice(i, i + 100).map((k) => seenCol.doc(k)));
+        docs.filter((d) => d.exists).forEach((d) => out.add(d.id));
+      }
+      return out;
+    },
+    markSeen: (key, data) => seenCol.doc(key).set({ ...data, at: FieldValue.serverTimestamp() }),
+    usedSources: async (since) =>
+      (await seenCol.where('at', '>=', since).get()).docs.filter((d) => d.get('result') === 'draft')
+        .map((d) => ({ ref: d.get('ref'), title: d.get('title') || '', text: d.get('text') || '' })),
+    exists: async (id) => (await firestore.collection('articles').doc(id).get()).exists,
+    saveArticle: (id, doc) => firestore.collection('articles').doc(id).set({ ...doc, updatedAt: FieldValue.serverTimestamp() }),
+    saveImage: async (p, buf) => {
+      const full = path.join(MEDIA, p);
+      await fs.mkdir(path.dirname(full), { recursive: true });
+      await fs.writeFile(full, buf);
+      return `/media/${p}`;
+    },
+    photos: async () => (await firestore.collection('photos').get()).docs.map((d) => ({ id: d.id, ...plainTs(d.data()) })),
+    usePhoto: (id) => firestore.collection('photos').doc(id).update({ lastUsedAt: FieldValue.serverTimestamp() }),
+  };
+  const cfg = (await firestore.collection('config').doc('redaktor').get()).data() || {};
+  redaktorResult = await runRedaktor(store, { days: 7, maxDrafts: Number(process.env.REDAKTOR_MAX || 6), aiImages: !!cfg.aiImages, log })
+    .catch((e) => ({ checked: 0, drafts: [], skipped: [], duplicates: 0, errors: [e.message] }));
+  await firestore.collection('redaktor_runs').add({ ...redaktorResult, trigger: build.redaktorRequested ? 'manual' : 'schedule', at: FieldValue.serverTimestamp() });
+  log(`redaktor: nowych szkiców ${redaktorResult.drafts.length}, pominiętych ${redaktorResult.skipped.length}, powtórek ${redaktorResult.duplicates}, błędów ${redaktorResult.errors.length}`);
 }
 
 // 2. zdjęcia wgrane w panelu (czekają w kolekcji „uploads” jako base64)
@@ -118,6 +159,7 @@ if (!args.has('--no-deploy')) {
 await Promise.all(uploads.docs.map((d) => d.ref.delete()));
 const update = { dirty: false, importRequested: false, lastBuild: startedAt };
 if (importResult) update.lastImportDay = warsawNow().day;
+if (redaktorResult) Object.assign(update, { redaktorRequested: false, lastRedaktorAt: startedAt });
 // nie kasujemy flagi, jeśli ktoś zapisał coś w trakcie publikacji
 const latest = (await buildRef.get()).data() || {};
 if (latest.dirtyAt && latest.dirtyAt.toMillis() > startedAt.toMillis()) update.dirty = true;
