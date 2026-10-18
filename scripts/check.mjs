@@ -1,4 +1,4 @@
-// Szybkie sprawdzenie (GitHub Actions co 30 min): czy trzeba publikować i czy pora na import z czestochowa.pl
+// Szybkie sprawdzenie (GitHub Actions co 30 min): czy trzeba publikować i czy pora na import (czestochowa.pl, wczestochowie.pl)
 import { appendFileSync } from 'node:fs';
 import { db, warsawNow, IMPORT_HOUR } from '../lib/firestore.js';
 

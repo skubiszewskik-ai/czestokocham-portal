@@ -41,7 +41,7 @@ const ic = (k: keyof typeof I) => `<svg viewBox="0 0 24 24" width="20" height="2
         <ul>
           <li>Artykuły z edytorem i galerią zdjęć</li>
           <li>Banery reklamowe z kontrolą wymiarów</li>
-          <li>Automatyczny import z czestochowa.pl o 15:00</li>
+          <li>Automatyczny import z czestochowa.pl i wczestochowie.pl o 15:00</li>
         </ul>
       </div>
       <div class="login-box">
@@ -94,12 +94,12 @@ const ic = (k: keyof typeof I) => `<svg viewBox="0 0 24 24" width="20" height="2
               <div class="stat"><span class="stat-l">Opublikowane</span><strong id="st-pub">–</strong><span class="stat-s">artykułów (ostatnie 200)</span></div>
               <div class="stat"><span class="stat-l">Dzisiaj</span><strong id="st-today">–</strong><span class="stat-s">nowych wiadomości</span></div>
               <div class="stat"><span class="stat-l">Banery</span><strong id="st-ads">–</strong><span class="stat-s">aktywnych</span></div>
-              <div class="stat"><span class="stat-l">Ostatni import</span><strong id="st-imp">–</strong><span class="stat-s" id="st-imp-s">z czestochowa.pl</span></div>
+              <div class="stat"><span class="stat-l">Ostatni import</span><strong id="st-imp">–</strong><span class="stat-s" id="st-imp-s">z czestochowa.pl i wczestochowie.pl</span></div>
             </div>
             <div class="quick">
               <button class="qa" data-go="new-article"><span class="qa-i red"><Fragment set:html={ic('plus')} /></span><span><strong>Nowy artykuł</strong><span>Napisz i opublikuj wiadomość</span></span></button>
               <button class="qa" data-go="new-ad"><span class="qa-i navy"><Fragment set:html={ic('ad')} /></span><span><strong>Nowy baner</strong><span>Dodaj reklamę klienta</span></span></button>
-              <button class="qa" data-go="import"><span class="qa-i green"><Fragment set:html={ic('sync')} /></span><span><strong>Importuj teraz</strong><span>Pobierz nowości z czestochowa.pl</span></span></button>
+              <button class="qa" data-go="import"><span class="qa-i green"><Fragment set:html={ic('sync')} /></span><span><strong>Importuj teraz</strong><span>Pobierz nowości z czestochowa.pl i wczestochowie.pl</span></span></button>
             </div>
             <div class="card">
               <div class="card-h"><h2>Ostatnie artykuły</h2><button class="lnk" data-tab-go="articles">Wszystkie →</button></div>
@@ -210,8 +210,8 @@ const ic = (k: keyof typeof I) => `<svg viewBox="0 0 24 24" width="20" height="2
             <div class="card import-hero">
               <span class="qa-i green big"><Fragment set:html={ic('sync')} /></span>
               <div class="grow">
-                <h2>Import z czestochowa.pl</h2>
-                <p>Codziennie po 15:00 automat pobiera nowe aktualności z <a href="https://www.czestochowa.pl/aktualnosci" target="_blank" rel="noopener">czestochowa.pl/aktualnosci</a> razem ze zdjęciami (WebP) i publikuje je z dopiskiem „Źródło: czestochowa.pl”. Zaimportowane artykuły możesz edytować – kolejny import ich nie nadpisze.</p>
+                <h2>Import z czestochowa.pl i wczestochowie.pl</h2>
+                <p>Codziennie po 15:00 automat pobiera nowe aktualności z <a href="https://www.czestochowa.pl/aktualnosci" target="_blank" rel="noopener">czestochowa.pl/aktualnosci</a> oraz z <a href="https://wczestochowie.pl/" target="_blank" rel="noopener">wczestochowie.pl</a> razem ze zdjęciami (WebP) i publikuje je z dopiskiem „Źródło: …” i odnośnikiem do oryginału. Artykuły sponsorowane z wczestochowie.pl są pomijane. Zaimportowane artykuły możesz edytować – kolejny import ich nie nadpisze.</p>
               </div>
               <button id="imp-run" class="btn red"><Fragment set:html={ic('bolt')} /> Importuj teraz</button>
             </div>

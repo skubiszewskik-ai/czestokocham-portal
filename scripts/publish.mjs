@@ -1,11 +1,11 @@
-// Publikacja portalu: (import z czestochowa.pl) → zdjęcia z panelu → zmiany z bazy → build Astro → Firebase Hosting
+// Publikacja portalu: (import z czestochowa.pl i wczestochowie.pl) → zdjęcia z panelu → zmiany z bazy → build Astro → Firebase Hosting
 // Użycie: node scripts/publish.mjs [--import] [--no-deploy]
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { execSync } from 'node:child_process';
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { db, warsawNow } from '../lib/firestore.js';
-import { importLatest } from '../lib/importer.js';
+import { importLatest, importWczestochowie } from '../lib/importer.js';
 
 const args = new Set(process.argv.slice(2));
 const firestore = db();
@@ -25,10 +25,10 @@ if (!(await adminsRef.get()).exists && process.env.ADMIN_EMAILS) {
   log('utworzono listę administratorów');
 }
 
-// 1. import z czestochowa.pl
+// 1. import z czestochowa.pl i wczestochowie.pl
 let importResult = null;
 if (args.has('--import') || build.importRequested) {
-  log('import z czestochowa.pl…');
+  log('import z czestochowa.pl i wczestochowie.pl…');
   const store = {
     exists: async (id) => (await firestore.collection('articles').doc(id).get()).exists,
     saveImage: async (p, buf) => {
@@ -38,8 +38,23 @@ if (args.has('--import') || build.importRequested) {
       return `/media/${p}`;
     },
     saveArticle: (id, doc) => firestore.collection('articles').doc(id).set({ ...doc, updatedAt: FieldValue.serverTimestamp() }),
+    recent: async (since) =>
+      (await firestore.collection('articles').where('publishedAt', '>=', since).select('keywords').get()).docs.map((d) => ({ slug: d.id, keywords: d.get('keywords') })),
   };
-  importResult = await importLatest(store, { pages: 3, limit: 30, log });
+  importResult = { checked: 0, imported: [], skipped: 0, errors: [] };
+  const sources = [
+    ['czestochowa.pl', () => importLatest(store, { pages: 3, limit: 30, log })],
+    ['wczestochowie.pl', () => importWczestochowie(store, { days: 3, log })],
+  ];
+  for (const [name, run] of sources) {
+    // awaria jednego źródła nie blokuje drugiego
+    const r = await run().catch((e) => ({ checked: 0, imported: [], skipped: 0, errors: [`${name}: ${e.message}`] }));
+    importResult.checked += r.checked;
+    importResult.imported.push(...r.imported);
+    importResult.skipped += r.skipped;
+    importResult.errors.push(...r.errors);
+    log(`${name}: nowych ${r.imported.length}, błędów ${r.errors.length}`);
+  }
   await firestore.collection('imports').add({ ...importResult, trigger: build.importRequested ? 'manual' : 'schedule', at: FieldValue.serverTimestamp() });
   log(`import: nowych ${importResult.imported.length}, błędów ${importResult.errors.length}`);
 }

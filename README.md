@@ -6,7 +6,7 @@ Statyczny portal w Astro hostowany na Firebase Hosting (plan Spark, bez opłat).
 - **Baza:** Cloud Firestore (artykuły, banery, ustawienia)
 - **Automat:** GitHub Actions (`.github/workflows/publish.yml`), co 30 min (6:00–23:30):
   - publikuje zmiany zapisane w panelu,
-  - codziennie po 15:00 importuje aktualności z czestochowa.pl (zdjęcia → WebP, dopisek „Źródło: czestochowa.pl”).
+  - codziennie po 15:00 importuje aktualności z czestochowa.pl i wczestochowie.pl (zdjęcia → WebP, dopisek „Źródło: …”; z wczestochowie.pl przez WordPress REST API, bez artykułów sponsorowanych, ostatnie 3 dni).
 - **Zdjęcia:** `public/media` (w repozytorium), dane: `data/` – zapisuje je automat.
 
 ## Ręcznie
@@ -14,7 +14,7 @@ Statyczny portal w Astro hostowany na Firebase Hosting (plan Spark, bez opłat).
 ```bash
 npm ci
 GOOGLE_APPLICATION_CREDENTIALS=~/.config/czestokocham/sa.json FIREBASE_SERVICE_ACCOUNT="$(cat ~/.config/czestokocham/sa.json)" npm run publish          # build + wdrożenie
-GOOGLE_APPLICATION_CREDENTIALS=~/.config/czestokocham/sa.json FIREBASE_SERVICE_ACCOUNT="$(cat ~/.config/czestokocham/sa.json)" npm run publish:import   # + import z czestochowa.pl
+GOOGLE_APPLICATION_CREDENTIALS=~/.config/czestokocham/sa.json FIREBASE_SERVICE_ACCOUNT="$(cat ~/.config/czestokocham/sa.json)" npm run publish:import   # + import z czestochowa.pl i wczestochowie.pl
 npm run seed:demo && npm run dev   # podgląd lokalny na danych demo
 ```
 

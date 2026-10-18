@@ -1,5 +1,5 @@
 # Automat Częstokocham (darmowy): co 30 minut sprawdza panel, a po 15:00 (czas polski) pobiera aktualności
-# z czestochowa.pl, buduje stronę i wdraża ją na Firebase Hosting (plan Spark).
+# z czestochowa.pl i wczestochowie.pl, buduje stronę i wdraża ją na Firebase Hosting (plan Spark).
 name: Publikacja
 
 on:
