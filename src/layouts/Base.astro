@@ -34,6 +34,11 @@ const adsense = settings.adsenseEnabled && settings.adsenseClient ? settings.ads
     <meta name="theme-color" content="#1a1b2e" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Częstokocham" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <link rel="alternate" type="application/rss+xml" title={SITE.name} href="/rss.xml" />
     <link rel="preload" href="/fonts/archivo-latin.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="preload" href="/fonts/archivo-latin-ext.woff2" as="font" type="font/woff2" crossorigin />
@@ -126,6 +131,23 @@ const adsense = settings.adsenseEnabled && settings.adsenseClient ? settings.ads
         }
         ['scroll', 'pointerdown', 'keydown', 'touchstart'].forEach(function (ev) { addEventListener(ev, late, { once: true, passive: true }); });
         setTimeout(late, 6000);
+        // aplikacja (PWA): tryb offline i instalacja na telefonie/komputerze
+        if ('serviceWorker' in navigator) addEventListener('load', function () { navigator.serviceWorker.register('/sw.js'); });
+        var deferred = null;
+        addEventListener('beforeinstallprompt', function (e) {
+          e.preventDefault(); deferred = e;
+          document.querySelectorAll('[data-install]').forEach(function (b) { b.hidden = false; });
+        });
+        document.querySelectorAll('[data-install]').forEach(function (b) {
+          b.addEventListener('click', function () {
+            if (!deferred) return;
+            deferred.prompt();
+            deferred.userChoice.finally(function () { deferred = null; document.querySelectorAll('[data-install]').forEach(function (x) { x.hidden = true; }); });
+          });
+        });
+        // iPhone nie ma przycisku instalacji – pokazujemy krótką podpowiedź
+        var ios = /iphone|ipad|ipod/i.test(navigator.userAgent) && !navigator.standalone;
+        if (ios) document.querySelectorAll('[data-install-ios]').forEach(function (x) { x.hidden = false; });
       })();
     </script>
   </body>

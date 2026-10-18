@@ -1,0 +1,15 @@
+---
+import Base from '../layouts/Base.astro';
+import { settings as getSettings } from '../lib/db';
+const settings = await getSettings();
+---
+<Base title="Brak połączenia" settings={settings} noindex>
+  <section class="wrap nf">
+    <h1 class="t-xl">Jesteś offline</h1>
+    <p class="lead">Nie ma połączenia z internetem. Strony, które już czytałeś, otworzą się bez zasięgu – nowe wiadomości pokażemy, gdy sieć wróci.</p>
+    <p><a class="btn red" href="/" onclick="location.reload();return false">Spróbuj ponownie</a></p>
+  </section>
+</Base>
+<style>
+  .nf { padding-top: clamp(48px, 10vw, 160px); display: grid; gap: 24px; }
+</style>

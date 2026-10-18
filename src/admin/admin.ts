@@ -733,3 +733,6 @@ sf.addEventListener('submit', async (e) => {
     buildStatus();
   } catch (err: any) { toast(err.message, true); }
 });
+
+// panel jako aplikacja (PWA) – instalowalny na telefonie redaktora; sam panel zawsze ładuje się z sieci
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
