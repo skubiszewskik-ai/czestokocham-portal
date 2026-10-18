@@ -36,7 +36,6 @@ jobs:
         run: node scripts/check.mjs
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-          REDAKTOR_ON: ${{ secrets.GEMINI_API_KEY != '' || secrets.GROQ_API_KEY != '' }}
 
   publish:
     needs: check

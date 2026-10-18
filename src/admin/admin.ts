@@ -289,7 +289,7 @@ async function openEditor(id: string | null) {
   $('#e-ai').hidden = !ai;
   if (ai) {
     const also = (d.basedOn.alsoIn || []).map((x: any) => `<a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.name)}</a>`).join(', ');
-    $('#e-ai-t').innerHTML = `Napisany na podstawie: <a href="${esc(d.basedOn.url)}" target="_blank" rel="noopener">${esc(d.basedOn.title || d.basedOn.name)}</a> (${esc(d.basedOn.name)})${also ? `. Ten sam temat także: ${also}` : ''}.<br>Zdjęcie: ${esc(IMG_SRC[d.imageSource] || '—')}${d.imagePage ? ` (<a href="${esc(d.imagePage)}" target="_blank" rel="noopener">licencja</a>)` : ''}. ${d.source ? 'Pod artykułem pojawi się źródło, bo to własny materiał portalu.' : 'Bez dopisku źródła (komunikat instytucji lub wydarzenie).'} Sprawdź fakty przed publikacją.`;
+    $('#e-ai-t').innerHTML = `Napisany na podstawie: <a href="${esc(d.basedOn.url)}" target="_blank" rel="noopener">${esc(d.basedOn.title || d.basedOn.name)}</a> (${esc(d.basedOn.name)})${also ? `. Ten sam temat także: ${also}` : ''}.<br>Zdjęcie: ${esc(IMG_SRC[d.imageSource] || '—')}${d.imagePage ? ` (<a href="${esc(d.imagePage)}" target="_blank" rel="noopener">licencja</a>)` : ''}. ${d.source ? 'Pod artykułem pojawi się źródło, bo to własny materiał portalu.' : 'Bez dopisku źródła (komunikat instytucji lub wydarzenie).'} Sprawdź fakty przed publikacją.${d.copyRisk ? `<br><strong>Uwaga: ${d.copyRisk}% zwrotów pokrywa się ze źródłem – przeredaguj tekst przed publikacją.</strong>` : ''}`;
   }
   $('#e-approve').hidden = !ai || d.status !== 'draft';
   current.cover = d.cover || null;
@@ -560,7 +560,7 @@ async function loadRedaktor() {
     return `<div class="rcard" data-rid="${esc(id)}">
       <span class="rcard-img" style="${img ? `background-image:url('${esc(src(img))}')` : ''}"></span>
       <div class="rcard-b">
-        <span class="rcard-m">${tagHtml(d.category)}<span>${fmt(toDate(d.publishedAt))}</span><span>· na podstawie <a href="${esc(d.basedOn?.url)}" target="_blank" rel="noopener">${esc(d.basedOn?.name)}</a></span><span>· zdjęcie: ${esc(IMG_SRC[d.imageSource] || '—')}</span></span>
+        <span class="rcard-m">${tagHtml(d.category)}<span>${fmt(toDate(d.publishedAt))}</span><span>· na podstawie <a href="${esc(d.basedOn?.url)}" target="_blank" rel="noopener">${esc(d.basedOn?.name)}</a></span><span>· zdjęcie: ${esc(IMG_SRC[d.imageSource] || '—')}</span>${d.copyRisk ? `<span class="pill off" title="Tyle zwrotów pokrywa się ze źródłem – przeredaguj przed publikacją">podobny do źródła ${d.copyRisk}%</span>` : ''}</span>
         <span class="rcard-t">${esc(d.title)}</span>
         <span class="rcard-l">${esc(d.lead)}</span>
         <span class="rcard-a">
