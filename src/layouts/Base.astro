@@ -52,6 +52,7 @@ const adsense = settings.adsenseEnabled && settings.adsenseClient ? settings.ads
     <meta property="og:image" content={ogImage} />
     <meta name="twitter:card" content="summary_large_image" />
     {adsense && <meta name="google-adsense-account" content={adsense} />}
+    {adsense && <script is:inline async src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${adsense}`} crossorigin="anonymous"></script>}
     {jsonld && <script type="application/ld+json" set:html={JSON.stringify(jsonld)} />}
     <script is:inline>document.documentElement.classList.add('js')</script>
   </head>
@@ -133,17 +134,11 @@ const adsense = settings.adsenseEnabled && settings.adsenseClient ? settings.ads
           box.querySelector('[data-consent-no]').addEventListener('click', function () { choose('no'); });
           document.querySelectorAll('[data-cookies]').forEach(function (a) { a.hidden = false; a.addEventListener('click', function (e) { e.preventDefault(); box.hidden = false; }); });
         }
-        // reklamy Google i statystyki ładowane dopiero po pierwszej interakcji – zero wpływu na PageSpeed
+        // skrypt AdSense jest w <head> (wymóg weryfikacji Google); miejsca reklamowe i statystyki ruszają po pierwszej interakcji
         var loaded = false;
         function late() {
           if (loaded) return; loaded = true;
-          if (adsense && document.querySelector('.adsbygoogle')) {
-            var s = document.createElement('script');
-            s.async = true; s.crossOrigin = 'anonymous';
-            s.src = 'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=' + adsense;
-            document.head.appendChild(s);
-            document.querySelectorAll('.adsbygoogle').forEach(function () { (window.adsbygoogle = window.adsbygoogle || []).push({}); });
-          }
+          if (adsense) document.querySelectorAll('.adsbygoogle').forEach(function () { (window.adsbygoogle = window.adsbygoogle || []).push({}); });
           if (ga) {
             var g = document.createElement('script'); g.async = true;
             g.src = 'https://www.googletagmanager.com/gtag/js?id=' + ga; document.head.appendChild(g);
