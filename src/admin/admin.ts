@@ -8,6 +8,7 @@ import {
 import { firebaseConfig } from '../lib/firebase-config';
 import { SLOTS, type SlotKey } from '../lib/slots';
 import { CATEGORIES } from '../lib/site';
+import { generate, rewrite, titles as aiTitles, EDIT_LABELS, type Keys, type Mode, type Draft } from './ai';
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -193,6 +194,7 @@ document.addEventListener('error', async (e) => {
     if (!hit) return;
     const url = `/media/${path}`;
     preview.set(url, `data:${hit.get('contentType') || 'image/webp'};base64,${hit.get('data')}`);
+    img.dataset.u ||= url;
     img.src = preview.get(url)!;
   } catch {}
 }, true);
@@ -226,7 +228,8 @@ $$('[data-drop]').forEach((zone) => {
 const busy = (sel: string, on: boolean) => $(sel).closest('.drop')?.classList.toggle('busy', on);
 
 // ---------------- HTML z edytora ----------------
-const ALLOWED = new Set(['P', 'STRONG', 'B', 'EM', 'I', 'A', 'UL', 'OL', 'LI', 'H2', 'H3', 'BR', 'BLOCKQUOTE']);
+const ALLOWED = new Set(['P', 'STRONG', 'B', 'EM', 'I', 'A', 'UL', 'OL', 'LI', 'H2', 'H3', 'BR', 'BLOCKQUOTE', 'HR', 'FIGURE', 'FIGCAPTION', 'IMG', 'IFRAME']);
+const YT = /^https:\/\/www\.youtube-nocookie\.com\/embed\/[\w-]{6,20}(\?[\w=&.-]*)?$/;
 function cleanHtml(html: string): string {
   const d = new DOMParser().parseFromString(`<div>${html}</div>`, 'text/html');
   const root = d.body.firstElementChild!;
@@ -235,13 +238,31 @@ function cleanHtml(html: string): string {
       walk(ch);
       if (!ALLOWED.has(ch.tagName)) { ch.replaceWith(...ch.childNodes); continue; }
       const href = ch.tagName === 'A' ? ch.getAttribute('href') : null;
+      // zdjęcie w treści: data-u to docelowy adres (src bywa podglądem blob:/data: przed publikacją)
+      const img = ch.tagName === 'IMG' ? { src: ch.getAttribute('data-u') || ch.getAttribute('src') || '', alt: ch.getAttribute('alt') || '', w: ch.getAttribute('width'), h: ch.getAttribute('height') } : null;
+      const frame = ch.tagName === 'IFRAME' ? ch.getAttribute('src') || '' : null;
       for (const a of [...ch.attributes]) ch.removeAttribute(a.name);
       if (href && /^(https?:|mailto:|\/)/.test(href)) { ch.setAttribute('href', href); if (/^https?:/.test(href) && !href.includes('czestokocham')) ch.setAttribute('rel', 'noopener'); }
+      if (img) {
+        if (!/^(\/media\/|https:\/\/)/.test(img.src)) { ch.remove(); continue; }
+        ch.setAttribute('src', img.src); ch.setAttribute('alt', img.alt); ch.setAttribute('loading', 'lazy');
+        if (img.w && img.h) { ch.setAttribute('width', img.w); ch.setAttribute('height', img.h); }
+      }
+      if (frame !== null) {
+        if (!YT.test(frame)) { ch.remove(); continue; }
+        Object.entries({ src: frame, title: 'Film YouTube', loading: 'lazy', allowfullscreen: '', allow: 'accelerometer; encrypted-media; gyroscope; picture-in-picture' }).forEach(([k, v]) => ch.setAttribute(k, v));
+      }
     }
   };
   walk(root);
+  root.querySelectorAll('figure').forEach((f) => {
+    if (!f.querySelector('img, iframe')) return f.replaceWith(...f.childNodes);
+    if (f.querySelector('iframe')) f.setAttribute('class', 'video');
+    const cap = f.querySelector('figcaption');
+    if (cap && !cap.textContent!.trim()) cap.remove();
+  });
   let out = root.innerHTML.replace(/<b>/g, '<strong>').replace(/<\/b>/g, '</strong>').replace(/<i>/g, '<em>').replace(/<\/i>/g, '</em>');
-  if (!/^\s*<(p|h2|h3|ul|ol|blockquote)/.test(out) && out.trim()) out = `<p>${out}</p>`;
+  if (!/^\s*<(p|h2|h3|ul|ol|blockquote|hr|figure)/.test(out) && out.trim()) out = `<p>${out}</p>`;
   return out.replace(/<p>\s*(<br>)?\s*<\/p>/g, '').trim();
 }
 const normalizeWord = (w: string) => w.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/ł/g, 'l');
@@ -343,7 +364,13 @@ async function openEditor(id: string | null) {
   F('sourceName').value = d.source?.name || '';
   F('sourceUrl').value = d.source?.url || '';
   F('coverAlt').value = d.cover?.alt || '';
+  if (htmlMode()) toggleHtml();
   $('#rte').innerHTML = d.body || '';
+  countWords();
+  offerDraft(d);
+  aiGen = null;
+  genStatus('');
+  ($('#gen') as HTMLDetailsElement).open = !id;
   const ai = d.origin === 'redaktor' && d.basedOn;
   $('#e-ai').hidden = !ai;
   if (ai) {
@@ -535,7 +562,7 @@ document.addEventListener('paste', async (e: ClipboardEvent) => {
   const text = e.clipboardData?.getData('text/plain')?.trim() || '';
   const img = imageFrom(e.clipboardData);
   // w treści lub polu tekstowym wklejony tekst zostaje tekstem (Word dokłada obrazek akapitu)
-  if (inText && (text || !img)) return;
+  if (inText && (text || !img || target.closest?.('#rte'))) return;
   if (img) {
     e.preventDefault(); e.stopPropagation();
     return setCover(img, 'wlasne');
@@ -751,28 +778,364 @@ $('#gal-in').addEventListener('change', async (e) => {
   if (files.length) toast(`Dodano zdjęcia: ${files.length}`);
 });
 
-// pasek formatowania
-$$('.rte-bar [data-cmd]').forEach((b) => b.addEventListener('mousedown', (e) => {
-  e.preventDefault();
-  const c = b.dataset.cmd!;
-  $('#rte').focus();
-  if (c === 'bold' || c === 'italic') document.execCommand(c);
-  else if (c === 'h2') document.execCommand('formatBlock', false, 'h2');
-  else if (c === 'p') document.execCommand('formatBlock', false, 'p');
-  else if (c === 'quote') document.execCommand('formatBlock', false, 'blockquote');
-  else if (c === 'ul') document.execCommand('insertUnorderedList');
-  else if (c === 'ol') document.execCommand('insertOrderedList');
-  else if (c === 'link') { const u = prompt('Adres linku (https://…)'); if (u) document.execCommand('createLink', false, u); }
-  else if (c === 'clear') document.execCommand('removeFormat');
-}));
+// ---------------- okienka: pytanie o wartość i wybór z listy ----------------
+function askBox(title: string, label: string, value = '', ok = 'OK', placeholder = ''): Promise<string | null> {
+  const d = $('#ask') as HTMLDialogElement;
+  const input = $('#ask-in') as HTMLInputElement;
+  $('#ask-t').textContent = title;
+  $('#ask-lt').textContent = label;
+  $('#ask-l').hidden = false;
+  $('#ask-list').innerHTML = '';
+  $('#ask-yes').hidden = false;
+  $('#ask-yes').textContent = ok;
+  input.value = value;
+  input.placeholder = placeholder;
+  d.showModal();
+  input.select();
+  d.returnValue = '';
+  return new Promise((res) => {
+    $('#ask-no').onclick = () => d.close();
+    d.onclose = () => { d.onclose = null; res(d.returnValue === 'ok' ? input.value.trim() : null); };
+  });
+}
+function pickBox(title: string, options: string[]): Promise<string | null> {
+  const d = $('#ask') as HTMLDialogElement;
+  $('#ask-t').textContent = title;
+  $('#ask-l').hidden = true;
+  $('#ask-yes').hidden = true;
+  $('#ask-list').innerHTML = options.map((o, i) => `<button type="button" data-i="${i}">${esc(o)}</button>`).join('');
+  d.showModal();
+  return new Promise((res) => {
+    let picked: string | null = null;
+    $$('#ask-list [data-i]').forEach((b) => (b.onclick = () => { picked = options[+b.dataset.i!]; d.close(); }));
+    $('#ask-no').onclick = () => d.close();
+    d.onclose = () => { d.onclose = null; res(picked); };
+  });
+}
+
+// ---------------- edytor treści ----------------
+const rte = $('#rte');
+const rteCard = rte.closest('.rte-card') as HTMLElement;
+const srcBox = $('#rte-src') as HTMLTextAreaElement;
+const blockSel = $('#rte-block') as HTMLSelectElement;
+const cmdBtn = (c: string) => $(`.rte-bar [data-cmd="${c}"]`);
+let savedRange: Range | null = null;
+const htmlMode = () => rteCard.classList.contains('html');
+/** Aktualna treść edytora (także z trybu kodu HTML) */
+const bodyHtml = () => cleanHtml(htmlMode() ? srcBox.value : rte.innerHTML);
+
 document.execCommand('defaultParagraphSeparator', false, 'p');
-$('#rte').addEventListener('paste', (e: ClipboardEvent) => {
-  e.preventDefault();
+const blockOf = (n: Node | null): HTMLElement | null => {
+  while (n && n.parentNode !== rte) n = n.parentNode;
+  return n instanceof HTMLElement ? n : null;
+};
+const closestIn = (sel: string): HTMLElement | null => {
+  const n = getSelection()?.anchorNode;
+  const el = (n instanceof Element ? n : n?.parentElement)?.closest(sel) as HTMLElement | null;
+  return el && rte.contains(el) ? el : null;
+};
+function syncBar() {
+  for (const c of ['bold', 'italic']) cmdBtn(c).setAttribute('aria-pressed', String(document.queryCommandState(c)));
+  cmdBtn('ul').setAttribute('aria-pressed', String(document.queryCommandState('insertUnorderedList')));
+  cmdBtn('ol').setAttribute('aria-pressed', String(document.queryCommandState('insertOrderedList')));
+  cmdBtn('link').setAttribute('aria-pressed', String(!!closestIn('a')));
+  const tag = blockOf(getSelection()?.anchorNode || null)?.tagName.toLowerCase();
+  blockSel.value = ['h2', 'h3', 'blockquote'].includes(tag || '') ? tag! : 'p';
+}
+document.addEventListener('selectionchange', () => {
+  const sel = getSelection();
+  if (!sel?.rangeCount || !rte.contains(sel.anchorNode)) return;
+  savedRange = sel.getRangeAt(0).cloneRange();
+  syncBar();
+});
+function restoreRange() {
+  rte.focus();
+  if (!savedRange || !rte.contains(savedRange.startContainer)) return;
+  const s = getSelection()!;
+  s.removeAllRanges();
+  s.addRange(savedRange);
+}
+/** Podmiana całej treści z zachowaniem historii (⌘Z cofa zmianę AI) */
+function replaceBody(html: string) {
+  if (htmlMode()) toggleHtml();
+  rte.focus();
+  document.execCommand('selectAll');
+  document.execCommand('insertHTML', false, html || '<p><br></p>');
+  rte.dispatchEvent(new Event('input'));
+}
+
+async function editLink() {
+  const a = closestIn('a') as HTMLAnchorElement | null;
+  const keep = savedRange; // po zamknięciu okienka przeglądarka stawia kursor na początku treści
+  const url = await askBox(a ? 'Edytuj link' : 'Wstaw link', 'Adres', a?.getAttribute('href') || '', a ? 'Zapisz' : 'Wstaw', 'https://');
+  savedRange = keep;
+  restoreRange();
+  if (url === null) return;
+  if (!url) { if (a) { a.replaceWith(...a.childNodes); rte.dispatchEvent(new Event('input')); } return; }
+  const href = /^(https?:|mailto:|\/)/.test(url) ? url : `https://${url}`;
+  if (a) { a.setAttribute('href', href); rte.dispatchEvent(new Event('input')); return; }
+  if (getSelection()?.isCollapsed) document.execCommand('insertHTML', false, `<a href="${esc(href)}">${esc(url.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, ''))}</a>&nbsp;`);
+  else document.execCommand('createLink', false, href);
+}
+async function insertVideo() {
+  const keep = savedRange;
+  const url = await askBox('Film z YouTube', 'Adres filmu', '', 'Wstaw', 'https://www.youtube.com/watch?v=…');
+  savedRange = keep;
+  restoreRange();
+  if (!url) return;
+  const id = url.match(/(?:youtu\.be\/|v=|\/embed\/|\/shorts\/|\/live\/)([\w-]{6,20})/)?.[1];
+  if (!id) return toast('To nie wygląda na adres filmu z YouTube.', true);
+  document.execCommand('insertHTML', false, `<figure class="video"><iframe src="https://www.youtube-nocookie.com/embed/${id}" title="Film YouTube"></iframe></figure><p><br></p>`);
+}
+async function insertImage(file: Blob) {
+  const range = savedRange;
+  const t = rteCard.querySelector('#rte-count')!;
+  t.textContent = 'Przetwarzam zdjęcie…';
+  try {
+    const img = await uploadPhoto(file, slugBase(), F('title').value || 'Zdjęcie', [1200]);
+    const big = img.srcset[img.srcset.length - 1];
+    savedRange = range;
+    restoreRange();
+    document.execCommand('insertHTML', false, `<figure><img src="${esc(src(big.url))}" data-u="${esc(big.url)}" alt="${esc(F('title').value)}" width="${big.w}" height="${big.h}"><figcaption></figcaption></figure><p><br></p>`);
+  } catch (err: any) { toast(err.message, true); }
+  countWords();
+}
+function toggleHtml() {
+  const on = !htmlMode();
+  if (on) {
+    srcBox.value = cleanHtml(rte.innerHTML).replace(/(<\/(p|h2|h3|ul|ol|blockquote|figure)>|<hr>)/g, '$1\n');
+    srcBox.style.height = `${Math.max(420, rte.offsetHeight)}px`;
+  } else {
+    rte.innerHTML = cleanHtml(srcBox.value);
+    rte.querySelectorAll('img').forEach((i) => { const u = i.getAttribute('src')!; i.dataset.u = u; i.src = src(u); });
+  }
+  rteCard.classList.toggle('html', on);
+  srcBox.hidden = !on;
+  cmdBtn('html').setAttribute('aria-pressed', String(on));
+  (on ? srcBox : rte).focus();
+  countWords();
+}
+function toggleFull(on = !rteCard.classList.contains('full')) {
+  rteCard.classList.toggle('full', on);
+  cmdBtn('full').setAttribute('aria-pressed', String(on));
+  document.documentElement.style.overflow = on ? 'hidden' : '';
+}
+
+$$('.rte-bar [data-cmd]').forEach((b) => {
+  b.addEventListener('mousedown', (e) => e.preventDefault()); // zaznaczenie w treści zostaje
+  b.addEventListener('click', () => {
+    const c = b.dataset.cmd!;
+    if (c === 'html') return toggleHtml();
+    if (c === 'full') return toggleFull();
+    if (htmlMode()) return;
+    restoreRange();
+    if (c === 'undo' || c === 'redo' || c === 'bold' || c === 'italic') document.execCommand(c);
+    else if (c === 'ul') document.execCommand('insertUnorderedList');
+    else if (c === 'ol') document.execCommand('insertOrderedList');
+    else if (c === 'link') editLink();
+    else if (c === 'unlink') { const a = closestIn('a'); if (a) a.replaceWith(...a.childNodes); else document.execCommand('unlink'); }
+    else if (c === 'image') ($('#rte-img-in') as HTMLInputElement).click();
+    else if (c === 'video') insertVideo();
+    else if (c === 'hr') document.execCommand('insertHTML', false, '<hr><p><br></p>');
+    else if (c === 'clear') { document.execCommand('removeFormat'); document.execCommand('formatBlock', false, 'p'); }
+    syncBar();
+    rte.dispatchEvent(new Event('input'));
+  });
+});
+blockSel.addEventListener('change', () => {
+  restoreRange();
+  document.execCommand('formatBlock', false, blockSel.value);
+  rte.dispatchEvent(new Event('input'));
+});
+$('#rte-img-in').addEventListener('change', (e) => {
+  const input = e.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = '';
+  if (file) insertImage(file);
+});
+rte.addEventListener('keydown', (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); editLink(); }
+});
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && rteCard.classList.contains('full') && !document.querySelector('dialog[open]')) toggleFull(false); });
+// klik w zdjęcie lub film zaznacza cały blok – Backspace/Delete go usuwa
+rte.addEventListener('click', (e) => {
+  rte.querySelectorAll('.sel').forEach((x) => x.classList.remove('sel'));
+  const t = e.target as HTMLElement;
+  const fig = t.closest('figure');
+  if (!fig || t.closest('figcaption')) return;
+  fig.classList.add('sel');
+  const r = document.createRange();
+  r.selectNode(fig);
+  const s = getSelection()!;
+  s.removeAllRanges();
+  s.addRange(r);
+});
+rte.addEventListener('paste', (e: ClipboardEvent) => {
+  const img = imageFrom(e.clipboardData);
   const html = e.clipboardData?.getData('text/html');
   const text = e.clipboardData?.getData('text/plain') || '';
+  e.preventDefault();
+  if (img && !text.trim()) return void insertImage(img);
   const clean = html ? cleanHtml(html) : text.split(/\n{2,}|\r\n\r\n/).map((p) => `<p>${esc(p.trim()).replace(/\n/g, '<br>')}</p>`).join('');
   document.execCommand('insertHTML', false, clean);
 });
+rte.addEventListener('dragover', (e) => { if (e.dataTransfer?.types.includes('Files')) e.preventDefault(); });
+rte.addEventListener('drop', (e) => {
+  const img = imageFrom(e.dataTransfer);
+  if (!img) return;
+  e.preventDefault();
+  const pos = (document as any).caretRangeFromPoint?.(e.clientX, e.clientY) as Range | undefined;
+  if (pos) savedRange = pos;
+  insertImage(img);
+});
+
+// licznik słów i kopia robocza w przeglądarce (na wypadek zamknięcia karty przed zapisem)
+const plural = (n: number, one: string, few: string, many: string) => (n === 1 ? one : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14) ? few : many);
+function countWords() {
+  const words = (htmlMode() ? srcBox.value.replace(/<[^>]+>/g, ' ') : rte.innerText).split(/\s+/).filter(Boolean).length;
+  $('#rte-count').textContent = `${words} ${plural(words, 'słowo', 'słowa', 'słów')} · ok. ${Math.max(1, Math.round(words / 200))} min czytania`;
+}
+const draftKey = () => `ck-ed:${current.id || 'nowy'}`;
+let draftTimer = 0;
+function keepDraft() {
+  clearTimeout(draftTimer);
+  draftTimer = window.setTimeout(() => {
+    if ($('#v-editor').hidden) return;
+    const v = { title: F('title').value, lead: F('lead').value, body: bodyHtml(), at: Date.now() };
+    if (!v.title.trim() && !v.body) return;
+    try { localStorage.setItem(draftKey(), JSON.stringify(v)); } catch { return; }
+    $('#rte-saved').textContent = `Kopia robocza w przeglądarce · ${new Date().toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })}`;
+  }, 800);
+}
+const dropDraft = (key = draftKey()) => { try { localStorage.removeItem(key); } catch {} $('#rte-saved').textContent = ''; };
+function offerDraft(d: any) {
+  $('#e-restore').hidden = true;
+  let v: any = null;
+  try { v = JSON.parse(localStorage.getItem(draftKey()) || 'null'); } catch {}
+  if (!v) return;
+  const saved = toDate(d.updatedAt);
+  if ((v.body === (d.body || '') && v.title === (d.title || '')) || (saved && +saved > v.at)) return dropDraft();
+  $('#e-restore-t').textContent = new Date(v.at).toLocaleString('pl-PL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  $('#e-restore').hidden = false;
+  $('#e-restore-yes').onclick = () => {
+    F('title').value = v.title; F('lead').value = v.lead; grow();
+    if (!current.id) F('slug').value = slugify(v.title);
+    rte.innerHTML = v.body;
+    countWords();
+    $('#e-restore').hidden = true;
+  };
+  $('#e-restore-no').onclick = () => { dropDraft(); $('#e-restore').hidden = true; };
+}
+rte.addEventListener('input', () => { countWords(); keepDraft(); });
+srcBox.addEventListener('input', () => { countWords(); keepDraft(); });
+F('title').addEventListener('input', keepDraft);
+F('lead').addEventListener('input', keepDraft);
+
+// ---------------- AI: napisz artykuł, popraw tekst ----------------
+let aiKeys: Keys | null = null;
+async function keys(): Promise<Keys> {
+  if (!aiKeys) { const d = (await getDoc(doc(db, 'config', 'ai'))).data() || {}; aiKeys = { gemini: d.gemini || '', groq: d.groq || '' }; }
+  return aiKeys;
+}
+let genMode: Mode = 'topic';
+const GEN: Record<Mode, { label: string; ph: string; hint: string }> = {
+  topic: { label: 'Temat albo roboczy tytuł', ph: 'np. Remont alei NMP – kiedy koniec utrudnień', hint: 'AI szuka informacji w Google i pisze tekst do Twojej redakcji. Zawsze sprawdź fakty przed publikacją.' },
+  link: { label: 'Link do artykułu', ph: 'https://…', hint: 'AI czyta artykuł i pisze z jego faktów własny tekst (pilnuje, żeby nie kopiować zdań). Własne ustalenia innego portalu dostaną dopisek źródła.' },
+  text: { label: 'Materiał', ph: '', hint: 'Komunikat, informacja prasowa albo Twoje notatki – AI zredaguje z nich gotowy artykuł, bez dodawania faktów.' },
+};
+function setGenMode(m: Mode) {
+  genMode = m;
+  $$('[data-gen]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.gen === m)));
+  $('#gen-lt').textContent = GEN[m].label;
+  const input = $('#gen-in') as HTMLInputElement;
+  input.hidden = m === 'text';
+  $('#gen-txt').hidden = m !== 'text';
+  input.placeholder = GEN[m].ph;
+  input.type = m === 'link' ? 'url' : 'text';
+  $('#gen-hint').textContent = GEN[m].hint;
+  (m === 'text' ? $('#gen-txt') : input).focus();
+}
+$$('[data-gen]').forEach((b) => b.addEventListener('click', () => setGenMode(b.dataset.gen as Mode)));
+$('#gen-in').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); $('#gen-go').click(); } });
+function genStatus(html: string, kind: '' | 'ok' | 'err' = '') {
+  const el = $('#gen-st');
+  el.hidden = !html;
+  el.className = `gen-st ${kind}`;
+  el.innerHTML = html;
+}
+let aiGen: any = null; // co napisało AI – zapisujemy przy artykule
+function applyDraft(d: Draft) {
+  F('title').value = d.title; grow();
+  if (!current.id) F('slug').value = slugify(d.title);
+  F('lead').value = d.lead;
+  replaceBody(cleanHtml(d.body));
+  F('category').value = d.category;
+  $('#slug-cat').textContent = d.category;
+  F('status').value = 'draft';
+  if (d.exclusive && d.basedOn) { F('sourceName').value = d.basedOn.name; F('sourceUrl').value = d.basedOn.url; }
+  ($('#c-prompt') as HTMLTextAreaElement).value = d.illustrationPrompt;
+  ($('#c-person') as HTMLInputElement).value = d.person?.name || d.photoQueries[0] || '';
+  articlePerson = d.person?.name || '';
+  syncCoverTools();
+  aiGen = { mode: genMode, provider: d.provider, model: d.model, basedOn: d.basedOn, person: d.person, tags: d.tags, illustrationPrompt: d.illustrationPrompt || null, at: new Date() };
+  keepDraft();
+}
+$('#gen-go').addEventListener('click', async () => {
+  const input = (genMode === 'text' ? ($('#gen-txt') as HTMLTextAreaElement).value : ($('#gen-in') as HTMLInputElement).value).trim();
+  if (!input) return toast(genMode === 'link' ? 'Wklej link do artykułu.' : genMode === 'text' ? 'Wklej materiał do zredagowania.' : 'Wpisz temat artykułu.', true);
+  if (genMode === 'link' && !/^https?:\/\/[^\s.]+\.\S+$/.test(input)) return toast('To nie wygląda na link (https://…).', true);
+  if (genMode === 'text' && input.length < 80) return toast('Materiału jest za mało – wklej więcej szczegółów.', true);
+  if ((F('title').value.trim() || rte.innerText.trim()) && !(await confirmBox('Zastąpić obecny tekst?', 'AI wpisze nowy tytuł, lead i treść. Poprzednią wersję przywrócisz skrótem ⌘Z w treści.', 'Zastąp'))) return;
+  const btn = $('#gen-go') as HTMLButtonElement;
+  btn.disabled = true; btn.classList.add('busy');
+  genStatus('Łączę się z AI…');
+  try {
+    const d = await generate({ mode: genMode, input, notes: ($('#gen-notes') as HTMLTextAreaElement).value, length: ($('#gen-len') as HTMLSelectElement).value, keys: await keys(), step: (t) => genStatus(esc(t)) });
+    applyDraft(d);
+    const notes = [
+      `<strong>Gotowe.</strong> Status ustawiony na „Szkic” – sprawdź fakty, dodaj zdjęcie główne i opublikuj.`,
+      d.copyRisk ? `<br><strong>Uwaga: ${d.copyRisk}% zwrotów pokrywa się ze źródłem – przeredaguj tekst.</strong>` : '',
+      d.basedOn ? `<br>Na podstawie: <a href="${esc(d.basedOn.url)}" target="_blank" rel="noopener">${esc(d.basedOn.title || d.basedOn.name)}</a>${d.exclusive ? ' – to własny materiał portalu, dopisałem źródło.' : ''}` : '',
+      d.person ? `<br>Tekst o osobie (${esc(d.person.name)}) – użyj jej prawdziwego zdjęcia, nie ilustracji AI.` : '',
+      d.sources.length ? `<br>Źródła z wyszukiwania:<ul>${d.sources.slice(0, 5).map((s) => `<li><a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.title)}</a></li>`).join('')}</ul>` : '',
+      d.provider !== 'gemini' ? `<br><small>Napisane zapasowym modelem (${esc(d.provider)}).</small>` : '',
+    ];
+    genStatus(notes.join(''), 'ok');
+  } catch (err: any) {
+    genStatus(esc(err.message || String(err)), 'err');
+  }
+  btn.disabled = false; btn.classList.remove('busy');
+});
+
+const aiBtn = $('#rte-ai');
+const aiPop = $('#rte-ai-pop');
+const closeAi = () => { aiPop.hidden = true; aiBtn.setAttribute('aria-expanded', 'false'); };
+aiBtn.addEventListener('click', () => { aiPop.hidden = !aiPop.hidden; aiBtn.setAttribute('aria-expanded', String(!aiPop.hidden)); });
+document.addEventListener('click', (e) => { if (!(e.target as HTMLElement).closest?.('.ai-menu')) closeAi(); });
+$$('[data-ai]').forEach((b) => b.addEventListener('click', async () => {
+  closeAi();
+  const kind = b.dataset.ai!;
+  const a = { title: F('title').value.trim(), lead: F('lead').value.trim(), body: bodyHtml() };
+  if (!a.body && kind !== 'titles') return toast('Najpierw napisz albo wygeneruj treść.', true);
+  if (!a.body && !a.lead) return toast('Najpierw napisz treść – tytuły AI dobierze do niej.', true);
+  aiBtn.classList.add('busy'); aiBtn.setAttribute('disabled', '');
+  const label = kind === 'titles' ? 'Szukam tytułów' : EDIT_LABELS[kind];
+  $('#rte-saved').textContent = `AI: ${label}…`;
+  try {
+    if (kind === 'titles') {
+      const list = await aiTitles(a, await keys());
+      const t = list.length ? await pickBox('Wybierz tytuł', list) : null;
+      if (t) { F('title').value = t; grow(); if (!current.id) F('slug').value = slugify(t); keepDraft(); }
+    } else {
+      const r = await rewrite(kind, a, await keys());
+      F('title').value = r.title; F('lead').value = r.lead; grow();
+      replaceBody(cleanHtml(r.body));
+      toast(`${label} – gotowe. ⌘Z w treści cofa zmianę.`);
+    }
+  } catch (err: any) { toast(err.message, true); }
+  $('#rte-saved').textContent = '';
+  aiBtn.classList.remove('busy'); aiBtn.removeAttribute('disabled');
+}));
 
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -786,7 +1149,8 @@ form.addEventListener('submit', async (e) => {
   if (current.cover) current.cover.alt = F('coverAlt').value || title;
   const data = {
     slug: id, title, lead,
-    body: cleanHtml($('#rte').innerHTML),
+    body: bodyHtml(),
+    ...(aiGen ? { aiAssist: aiGen } : {}),
     category: F('category').value,
     status: F('status').value,
     featured: F('featured').checked,
@@ -811,6 +1175,8 @@ form.addEventListener('submit', async (e) => {
       await Promise.all(others.docs.filter((d) => d.id !== id).map((d) => updateDoc(d.ref, { featured: false, updatedAt: serverTimestamp() })));
     }
     await markDirty();
+    dropDraft(); dropDraft('ck-ed:nowy');
+    aiGen = null;
     current.id = id;
     current.data = { ...current.data, ...data };
     F('slug').readOnly = true;
@@ -1104,7 +1470,19 @@ async function loadSettings() {
   S('ghToken').value = '';
   S('ghToken').placeholder = gh?.token ? 'Token zapisany ✓ – wklej nowy, aby zmienić' : 'github_pat_…';
   $('#gh-del').hidden = !gh?.token;
+  const ai = (await getDoc(doc(db, 'config', 'ai'))).data() || {};
+  S('geminiKey').value = ''; S('groqKey').value = '';
+  S('geminiKey').placeholder = ai.gemini ? 'Klucz zapisany ✓ – wklej nowy, aby zmienić' : 'AIza… / AQ.…';
+  S('groqKey').placeholder = ai.groq ? 'Klucz zapisany ✓ – wklej nowy, aby zmienić' : 'gsk_…';
+  $('#ai-del').hidden = !ai.gemini && !ai.groq;
 }
+$('#ai-del').addEventListener('click', async () => {
+  if (!(await confirmBox('Usunąć klucze AI?', 'Pisanie z tematu i z linku przestanie działać (z tekstu – zapasowym modelem).'))) return;
+  await setDoc(doc(db, 'config', 'ai'), { gemini: null, groq: null });
+  aiKeys = null;
+  toast('Klucze AI usunięte');
+  loadSettings();
+});
 $('#gh-del').addEventListener('click', async () => {
   if (!(await confirmBox('Usunąć token?', 'Publikacja wróci do harmonogramu GitHuba (może się opóźniać).'))) return;
   await setDoc(doc(db, 'config', 'github'), { token: null });
@@ -1125,7 +1503,11 @@ sf.addEventListener('submit', async (e) => {
       setDoc(doc(db, 'config', 'site'), { adsenseEnabled: S('adsenseEnabled').checked, adsenseClient: client, adsenseSlots, adsTxt: S('adsTxt').value.trim(), analyticsId: S('analyticsId').value.trim() }),
       setDoc(doc(db, 'config', 'admins'), { emails }),
       ...(S('ghToken').value.trim() ? [setDoc(doc(db, 'config', 'github'), { token: S('ghToken').value.trim() })] : []),
+      ...(S('geminiKey').value.trim() || S('groqKey').value.trim()
+        ? [setDoc(doc(db, 'config', 'ai'), { ...(S('geminiKey').value.trim() ? { gemini: S('geminiKey').value.trim() } : {}), ...(S('groqKey').value.trim() ? { groq: S('groqKey').value.trim() } : {}) }, { merge: true })]
+        : []),
     ]);
+    aiKeys = null;
     await markDirty();
     toast('Ustawienia zapisane – zadziałają po najbliższej publikacji.');
     loadSettings();

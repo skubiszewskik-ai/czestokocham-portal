@@ -22,6 +22,17 @@ const I = {
   close: '<path d="M6 6l12 12M18 6 6 18"/>',
   spark: '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/>',
   check: '<path d="M5 12.5 10 17l9-10"/>',
+  undo: '<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>',
+  redo: '<path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/>',
+  link: '<path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/>',
+  unlink: '<path d="M18.8 13.6l1.7-1.7a5 5 0 0 0-7-7l-1.7 1.7M5.2 10.4l-1.7 1.7a5 5 0 0 0 7 7l1.7-1.7M8 2v3M2 8h3M16 22v-3M22 16h-3"/>',
+  ul: '<path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="18" r="1"/>',
+  ol: '<path d="M10 6h10M10 12h10M10 18h10M4 4h1v4M4 8h2M6 18H4l2-2.5a1 1 0 1 0-2-1"/>',
+  play: '<rect x="2.5" y="5" width="19" height="14" rx="4"/><path d="m10 9 5 3-5 3z"/>',
+  minus: '<path d="M4 12h16"/>',
+  eraser: '<path d="m7 21-4-4 10-10 7 7-7 7z"/><path d="M7 21h14M10 10l7 7"/>',
+  code: '<path d="m8 7-5 5 5 5M16 7l5 5-5 5"/>',
+  expand: '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>',
   crop: '<path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M18 22V8a2 2 0 0 0-2-2H2"/>',
 };
 const ic = (k: keyof typeof I) => `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${I[k]}</svg>`;
@@ -144,6 +155,31 @@ const ic = (k: keyof typeof I) => `<svg viewBox="0 0 24 24" width="20" height="2
               </div>
               <div class="egrid">
                 <div class="ecol">
+                  <div class="card restore" id="e-restore" hidden>
+                    <span>Masz niezapisaną wersję tego artykułu z <strong id="e-restore-t"></strong>.</span>
+                    <span class="cbtns"><button type="button" class="btn ghost" id="e-restore-no">Odrzuć</button><button type="button" class="btn red" id="e-restore-yes">Przywróć</button></span>
+                  </div>
+                  <details class="card gen" id="gen">
+                    <summary><span class="gen-i"><Fragment set:html={ic('spark')} /></span><span><strong>Napisz z AI</strong><small>Z tematu, z linku do artykułu albo z Twoich notatek</small></span></summary>
+                    <div class="gen-b">
+                      <div class="seg" role="tablist" aria-label="Na podstawie">
+                        <button type="button" role="tab" data-gen="topic" aria-selected="true">Z tematu</button>
+                        <button type="button" role="tab" data-gen="link" aria-selected="false">Z linku</button>
+                        <button type="button" role="tab" data-gen="text" aria-selected="false">Z tekstu</button>
+                      </div>
+                      <label id="gen-l"><span id="gen-lt">Temat albo roboczy tytuł</span>
+                        <input id="gen-in" autocomplete="off" placeholder="np. Remont alei NMP – kiedy koniec utrudnień" />
+                        <textarea id="gen-txt" rows="7" hidden placeholder="Wklej komunikat, informację prasową, treść artykułu albo swoje notatki"></textarea>
+                      </label>
+                      <label><span>Wskazówki <span class="opt">(opcjonalnie)</span></span><textarea id="gen-notes" rows="2" placeholder="np. podkreśl termin zakończenia, dodaj cytat prezydenta, pisz dla kierowców"></textarea></label>
+                      <div class="gen-row">
+                        <label class="gen-len">Długość<select id="gen-len"><option value="short">Krótki (150–250 słów)</option><option value="normal" selected>Standard (300–450 słów)</option><option value="long">Długi (550–800 słów)</option></select></label>
+                        <button type="button" class="btn red" id="gen-go"><Fragment set:html={ic('spark')} /> Napisz artykuł</button>
+                      </div>
+                      <p class="gen-st" id="gen-st" hidden></p>
+                      <small class="hint" id="gen-hint">AI szuka informacji w Google i pisze tekst do Twojej redakcji. Zawsze sprawdź fakty przed publikacją.</small>
+                    </div>
+                  </details>
                   <div class="card">
                     <textarea name="title" class="e-title" rows="1" placeholder="Tytuł artykułu" required maxlength="160"></textarea>
                     <div class="slug"><span class="slug-pre">czestokocham.pl/<span id="slug-cat">miasto</span>/</span><input name="slug" required pattern="[a-z0-9-]+" placeholder="adres-artykulu" /></div>
@@ -151,20 +187,45 @@ const ic = (k: keyof typeof I) => `<svg viewBox="0 0 24 24" width="20" height="2
                   </div>
                   <div class="card rte-card">
                     <div class="rte-bar" role="toolbar" aria-label="Formatowanie">
-                      <button type="button" data-cmd="bold" title="Pogrubienie"><b>B</b></button>
-                      <button type="button" data-cmd="italic" title="Kursywa"><i>I</i></button>
+                      <button type="button" data-cmd="undo" title="Cofnij (⌘Z)" aria-label="Cofnij"><Fragment set:html={ic('undo')} /></button>
+                      <button type="button" data-cmd="redo" title="Ponów (⇧⌘Z)" aria-label="Ponów"><Fragment set:html={ic('redo')} /></button>
                       <span class="sep"></span>
-                      <button type="button" data-cmd="h2" title="Śródtytuł">H2</button>
-                      <button type="button" data-cmd="p" title="Akapit">¶</button>
-                      <button type="button" data-cmd="quote" title="Cytat">“ ”</button>
+                      <select id="rte-block" title="Styl akapitu" aria-label="Styl akapitu">
+                        <option value="p">Akapit</option><option value="h2">Śródtytuł</option><option value="h3">Podtytuł</option><option value="blockquote">Cytat</option>
+                      </select>
                       <span class="sep"></span>
-                      <button type="button" data-cmd="ul" title="Lista">• Lista</button>
-                      <button type="button" data-cmd="ol" title="Lista numerowana">1. Lista</button>
-                      <button type="button" data-cmd="link" title="Link">Link</button>
+                      <button type="button" data-cmd="bold" title="Pogrubienie (⌘B)"><b>B</b></button>
+                      <button type="button" data-cmd="italic" title="Kursywa (⌘I)"><i>I</i></button>
+                      <button type="button" data-cmd="link" title="Link (⌘K)" aria-label="Link"><Fragment set:html={ic('link')} /></button>
+                      <button type="button" data-cmd="unlink" title="Usuń link" aria-label="Usuń link"><Fragment set:html={ic('unlink')} /></button>
                       <span class="sep"></span>
-                      <button type="button" data-cmd="clear" title="Wyczyść formatowanie">Wyczyść</button>
+                      <button type="button" data-cmd="ul" title="Lista punktowana" aria-label="Lista punktowana"><Fragment set:html={ic('ul')} /></button>
+                      <button type="button" data-cmd="ol" title="Lista numerowana" aria-label="Lista numerowana"><Fragment set:html={ic('ol')} /></button>
+                      <span class="sep"></span>
+                      <button type="button" data-cmd="image" title="Zdjęcie w treści (albo wklej ⌘V)" aria-label="Zdjęcie w treści"><Fragment set:html={ic('img')} /></button>
+                      <button type="button" data-cmd="video" title="Film z YouTube" aria-label="Film z YouTube"><Fragment set:html={ic('play')} /></button>
+                      <button type="button" data-cmd="hr" title="Linia oddzielająca" aria-label="Linia oddzielająca"><Fragment set:html={ic('minus')} /></button>
+                      <span class="sep"></span>
+                      <button type="button" data-cmd="clear" title="Wyczyść formatowanie zaznaczenia" aria-label="Wyczyść formatowanie"><Fragment set:html={ic('eraser')} /></button>
+                      <button type="button" data-cmd="html" title="Kod HTML" aria-label="Kod HTML"><Fragment set:html={ic('code')} /></button>
+                      <button type="button" data-cmd="full" title="Pełny ekran (Esc – wyjście)" aria-label="Pełny ekran"><Fragment set:html={ic('expand')} /></button>
+                      <span class="rte-sp"></span>
+                      <div class="ai-menu">
+                        <button type="button" class="ai-btn" id="rte-ai" aria-haspopup="menu" aria-expanded="false"><Fragment set:html={ic('spark')} /> AI</button>
+                        <div class="ai-pop" id="rte-ai-pop" role="menu" hidden>
+                          <button type="button" role="menuitem" data-ai="polish">Popraw język i styl</button>
+                          <button type="button" role="menuitem" data-ai="shorter">Skróć</button>
+                          <button type="button" role="menuitem" data-ai="longer">Rozbuduj</button>
+                          <button type="button" role="menuitem" data-ai="simpler">Uprość</button>
+                          <button type="button" role="menuitem" data-ai="headings">Dodaj śródtytuły</button>
+                          <button type="button" role="menuitem" data-ai="titles">Zaproponuj tytuły</button>
+                        </div>
+                      </div>
                     </div>
                     <div id="rte" class="rte" contenteditable="true" data-ph="Zacznij pisać treść…"></div>
+                    <textarea id="rte-src" class="rte-src" spellcheck="false" hidden aria-label="Kod HTML treści"></textarea>
+                    <div class="rte-foot"><span id="rte-count">0 słów</span><span id="rte-saved"></span></div>
+                    <input id="rte-img-in" type="file" accept="image/*" hidden />
                   </div>
                   <div class="card">
                     <div class="card-h"><h2>Galeria</h2><span class="hint" id="gal-n"></span></div>
@@ -325,6 +386,13 @@ const ic = (k: keyof typeof I) => `<svg viewBox="0 0 24 24" width="20" height="2
                   <button type="button" class="btn ghost danger" id="gh-del" hidden>Usuń token</button>
                 </div>
                 <div class="card">
+                  <h2 class="ch">Asystent AI w edytorze</h2>
+                  <p class="hint">Do pisania artykułów z tematu i z linku. Darmowy klucz: <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a> (może być ten sam, co w sekrecie GEMINI_API_KEY na GitHubie). Klucz widzą tylko osoby z dostępem do panelu.</p>
+                  <label>Klucz Google Gemini<input name="geminiKey" type="password" autocomplete="off" placeholder="AIza… / AQ.…" /></label>
+                  <label><span>Klucz Groq <span class="opt">(opcjonalny, zapasowy)</span></span><input name="groqKey" type="password" autocomplete="off" placeholder="gsk_…" /></label>
+                  <button type="button" class="btn ghost danger" id="ai-del" hidden>Usuń klucze AI</button>
+                </div>
+                <div class="card">
                   <h2 class="ch">Dostęp do panelu</h2>
                   <label>Adresy e-mail Google, po jednym w linii<textarea name="admins" rows="5"></textarea></label>
                 </div>
@@ -360,6 +428,14 @@ const ic = (k: keyof typeof I) => `<svg viewBox="0 0 24 24" width="20" height="2
       <h2 id="cf-t">Na pewno?</h2>
       <p id="cf-m"></p>
       <div class="cf-b"><button class="btn ghost" value="no" id="cf-no">Anuluj</button><button class="btn red" value="yes" id="cf-yes">Usuń</button></div>
+    </dialog>
+    <dialog id="ask" class="confirm">
+      <form method="dialog" id="ask-f" class="ask-f">
+        <h2 id="ask-t"></h2>
+        <label id="ask-l"><span id="ask-lt"></span><input id="ask-in" autocomplete="off" /></label>
+        <div id="ask-list" class="titles-box"></div>
+        <div class="cf-b"><button class="btn ghost" type="button" id="ask-no">Anuluj</button><button class="btn red" type="submit" value="ok" id="ask-yes">OK</button></div>
+      </form>
     </dialog>
     <dialog id="crop" class="crop">
       <h2 id="crop-t">Wykadruj zdjęcie główne</h2>
@@ -509,18 +585,80 @@ const ic = (k: keyof typeof I) => `<svg viewBox="0 0 24 24" width="20" height="2
   .slug-pre { white-space: nowrap; }
   .adm .slug input { border: 0 !important; background: transparent !important; min-height: 36px !important; padding: 6px 10px 6px 0 !important; font-size: 13.5px !important; box-shadow: none !important; }
   .rte-card { gap: 0; padding: 0; }
-  .rte-bar { display: flex; flex-wrap: wrap; gap: 4px; padding: 10px; background: #f7f8fb; border-bottom: 1px solid #eef0f4; border-radius: 20px 20px 0 0; position: sticky; top: 140px; z-index: 2; }
-  .rte-bar button { border: 0; background: transparent; padding: 8px 11px; border-radius: 9px; cursor: pointer; font-size: 14px; font-weight: 600; transition: background-color 0.15s; }
-  .rte-bar button:hover { background: #e7e9ef; }
-  .rte-bar .sep { width: 1px; background: #e1e3ea; margin: 4px 4px; }
+  .rte-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; padding: 8px 10px; background: #f7f8fb; border-bottom: 1px solid #eef0f4; border-radius: 20px 20px 0 0; position: sticky; top: 140px; z-index: 3; }
+  .rte-bar button { display: inline-grid; place-items: center; min-width: 36px; height: 36px; border: 0; background: transparent; padding: 0 9px; border-radius: 9px; cursor: pointer; font-size: 15px; font-weight: 600; color: var(--ink-2); transition: background-color 0.15s, color 0.15s; }
+  .rte-bar button svg { width: 18px; height: 18px; }
+  .rte-bar button:hover { background: #e7e9ef; color: var(--ink); }
+  .rte-bar button[aria-pressed='true'] { background: var(--ink); color: #fff; }
+  .rte-bar button:disabled { opacity: 0.35; pointer-events: none; }
+  .adm .rte-bar select { width: auto; min-height: 36px; height: 36px; padding: 0 30px 0 10px; border-radius: 9px; border-color: transparent; background-color: transparent; font-size: 14px; font-weight: 650; cursor: pointer; }
+  .adm .rte-bar select:hover { background-color: #e7e9ef; }
+  .rte-bar .sep { width: 1px; height: 22px; background: #e1e3ea; margin: 0 5px; }
+  .rte-sp { flex: 1; }
+  .ai-menu { position: relative; }
+  .rte-bar .ai-btn { display: inline-flex; gap: 6px; padding: 0 12px; background: #fde4e5; color: #9b0f16; font-weight: 700; }
+  .rte-bar .ai-btn:hover { background: #fbcfd2; color: #7f0b11; }
+  .rte-bar .ai-btn.busy svg { animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .ai-pop { position: absolute; right: 0; top: calc(100% + 6px); z-index: 6; display: grid; min-width: 220px; padding: 6px; background: #fff; border-radius: 14px; box-shadow: 0 20px 44px -18px rgb(22 24 48 / 0.45), 0 0 0 1px #eef0f4; }
+  .rte-bar .ai-pop button { display: block; width: 100%; text-align: left; height: auto; padding: 10px 12px; font-size: 14.5px; }
   .rte { min-height: 420px; padding: 22px 24px; font-size: 18px; line-height: 1.7; outline: none; }
   .rte:empty::before { content: attr(data-ph); color: #a0a3b3; }
   .rte p { margin-bottom: 1em; }
   .rte h2 { font-size: 1.35rem; font-weight: 800; margin: 1em 0 0.4em; }
+  .rte h3 { font-size: 1.15rem; font-weight: 800; margin: 1em 0 0.4em; }
   .rte ul { list-style: disc; padding-left: 1.3em; margin-bottom: 1em; }
   .rte ol { list-style: decimal; padding-left: 1.4em; margin-bottom: 1em; }
   .rte blockquote { background: #f2f3f7; padding: 14px 18px; border-radius: 12px; margin: 1em 0; }
   .rte a { color: var(--red-ink); text-decoration: underline; }
+  .rte hr { border: 0; height: 2px; background: #e1e3ea; margin: 1.6em 0; }
+  .rte figure { margin: 1.2em 0; }
+  .rte figure img { display: block; width: 100%; height: auto; border-radius: 12px; }
+  .rte figure.video { position: relative; aspect-ratio: 16 / 9; border-radius: 12px; overflow: hidden; background: #111326; }
+  .rte figure.video iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; pointer-events: none; }
+  .rte figure.video::after { content: 'Film YouTube'; position: absolute; left: 12px; bottom: 12px; padding: 4px 10px; border-radius: 999px; background: rgb(0 0 0 / 0.6); color: #fff; font-size: 13px; font-weight: 650; }
+  .rte figcaption { margin-top: 8px; font-size: 14px; color: var(--ink-soft); outline: none; }
+  .rte figcaption:empty::before { content: 'Podpis zdjęcia (opcjonalnie)'; color: #a0a3b3; }
+  .rte .sel { outline: 3px solid var(--red); outline-offset: 2px; }
+  .adm .rte-src { display: block; min-height: 420px; border: 0; border-radius: 0; padding: 22px 24px; font: 14px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; resize: vertical; box-shadow: none; background: #fbfbfd; }
+  .rte-foot { display: flex; justify-content: space-between; gap: 12px; padding: 10px 24px; border-top: 1px solid #eef0f4; font-size: 13px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+  .rte-card.full { position: fixed; inset: 0; z-index: 60; border-radius: 0; overflow: auto; display: flex; flex-direction: column; }
+  .rte-card.full .rte-bar { top: 0; border-radius: 0; justify-content: center; }
+  .rte-card.full .rte, .rte-card.full .rte-src { flex: 1; width: min(760px, 100%); margin-inline: auto; }
+  .rte-card.full .rte-foot { position: sticky; bottom: 0; background: #fff; }
+  .rte-card.html .rte { display: none; }
+  .rte-card.html [data-cmd]:not([data-cmd='html']):not([data-cmd='full']), .rte-card.html #rte-block, .rte-card.html .ai-menu { opacity: 0.35; pointer-events: none; }
+  /* napisz z AI */
+  .gen { padding: 0; gap: 0; }
+  .gen summary { display: flex; align-items: center; gap: 14px; padding: 16px 20px; cursor: pointer; list-style: none; border-radius: 20px; transition: background-color 0.15s; }
+  .gen summary::-webkit-details-marker { display: none; }
+  .gen summary::after { content: ''; margin-left: auto; width: 9px; height: 9px; border-right: 2px solid var(--ink-soft); border-bottom: 2px solid var(--ink-soft); rotate: 45deg; translate: 0 -3px; transition: rotate 0.2s var(--ease); }
+  .gen[open] summary::after { rotate: 225deg; translate: 0 3px; }
+  .gen summary:hover { background: #f7f8fb; }
+  .gen summary strong { display: block; font-size: 16px; }
+  .gen summary small { display: block; font-size: 13.5px; color: var(--ink-soft); }
+  .gen-i { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 12px; background: var(--red); color: #fff; }
+  .gen-i svg { width: 20px; height: 20px; }
+  .gen-b { display: grid; gap: 14px; padding: 4px 20px 20px; }
+  .seg { display: inline-flex; gap: 4px; padding: 4px; background: #f2f3f7; border-radius: 12px; justify-self: start; }
+  .seg button { border: 0; background: none; padding: 8px 14px; border-radius: 9px; font-weight: 650; font-size: 14px; color: var(--ink-2); cursor: pointer; transition: background-color 0.15s; }
+  .seg button[aria-selected='true'] { background: #fff; color: var(--ink); box-shadow: 0 1px 3px rgb(22 24 48 / 0.12); }
+  .opt { font-weight: 500; color: var(--ink-soft); }
+  .gen-row { display: flex; align-items: end; gap: 12px; flex-wrap: wrap; }
+  .gen-len { flex: 1; min-width: 200px; }
+  .gen-row .btn { min-height: 44px; }
+  .gen-row .btn.busy svg { animation: spin 1s linear infinite; }
+  .gen-st { padding: 12px 14px; border-radius: 12px; background: #f2f3f7; font-size: 14px; font-weight: 600; }
+  .gen-st.err { background: #fde4e5; color: #9b0f16; }
+  .gen-st.ok { background: #dcfce7; color: #166534; font-weight: 500; }
+  .gen-st a { text-decoration: underline; }
+  .gen-st ul { margin-top: 6px; padding-left: 1.2em; list-style: disc; }
+  .restore { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 14px 18px; background: #fef3c7; color: #78350f; }
+  .ask-f { display: grid; gap: 14px; }
+  .titles-box { display: grid; gap: 6px; }
+  .titles-box:empty { display: none; }
+  .titles-box button { text-align: left; border: 1.5px solid #e1e3ea; background: #fff; padding: 10px 12px; border-radius: 10px; font-size: 15px; font-weight: 600; cursor: pointer; }
+  .titles-box button:hover { border-color: var(--ink); }
   .thumbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
   .thumbs:empty { display: none; }
   .thumbs figure { position: relative; aspect-ratio: 4 / 3; border-radius: 12px; overflow: hidden; background: #eef0f4; }
@@ -667,6 +805,7 @@ const ic = (k: keyof typeof I) => `<svg viewBox="0 0 24 24" width="20" height="2
     .pub .pub-t { display: none; }
     .ebar { top: 66px; flex-wrap: wrap; }
     .rte-bar { top: 0; position: static; }
+    .rte { padding: 18px 16px; }
     .import-hero { flex-direction: column; align-items: flex-start; }
     .arow { grid-template-columns: 64px minmax(0, 1fr); padding: 12px 16px; }
     .arow-r { grid-column: 2; }
