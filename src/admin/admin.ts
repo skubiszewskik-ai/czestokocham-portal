@@ -404,10 +404,11 @@ document.addEventListener('paste', async (e: ClipboardEvent) => {
   } catch { toast('Ta strona nie pozwala pobrać zdjęcia z adresu. Kliknij zdjęcie prawym przyciskiem → „Kopiuj obraz” i wklej ponownie.', true); }
 }, true);
 
-// ---------------- narzędzia zdjęcia głównego: nowa ilustracja AI, zdjęcie osoby ----------------
+// ---------------- narzędzia zdjęcia głównego: nowa ilustracja AI, wyszukiwanie zdjęcia ----------------
 const personName = () => ($('#c-person') as HTMLInputElement).value.trim();
+let articlePerson = ''; // artykuł o konkretnej osobie (wykrył redaktor) – bez ilustracji AI
 function resetCoverTools(d: any) {
-  const person = d.ai?.person?.name || '';
+  const person = (articlePerson = d.ai?.person?.name || '');
   ($('#c-person') as HTMLInputElement).value = person;
   ($('#c-prompt') as HTMLTextAreaElement).value = d.ai?.illustrationPrompt || '';
   $('#c-ai-box').hidden = !d.coverPending && !d.coverCandidate;
@@ -423,14 +424,20 @@ function resetCoverTools(d: any) {
   syncCoverTools();
 }
 function syncCoverTools() {
-  const person = personName();
   const ai = $('#c-ai') as HTMLButtonElement;
-  ai.disabled = !!person;
-  ai.title = person ? 'Artykuł o osobie – użyj jej prawdziwego zdjęcia' : '';
-  if (person) $('#c-ai-box').hidden = true;
-  ($('#c-google') as HTMLAnchorElement).href = `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(person || F('title').value)}`;
+  ai.disabled = !!articlePerson;
+  ai.title = articlePerson ? 'Artykuł o osobie – użyj jej prawdziwego zdjęcia' : '';
+  if (articlePerson) $('#c-ai-box').hidden = true;
+  ($('#c-google') as HTMLAnchorElement).href = `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(personName() || F('title').value)}`;
 }
 $('#c-person').addEventListener('input', syncCoverTools);
+// Enter w polu wyszukiwania otwiera Google Grafika (zamiast zapisywać artykuł)
+$('#c-person').addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter') return;
+  e.preventDefault();
+  syncCoverTools();
+  $('#c-google').click();
+});
 $('#c-ai').addEventListener('click', () => {
   const box = $('#c-ai-box');
   box.hidden = !box.hidden;
@@ -515,7 +522,7 @@ function found(p: any): Found | null {
 let results: Found[] = [];
 $('#c-find-go').addEventListener('click', async () => {
   const name = personName();
-  if (!name) return toast('Wpisz imię i nazwisko.', true);
+  if (!name) return toast('Wpisz, czego szukasz.', true);
   const btn = $('#c-find-go') as HTMLButtonElement;
   btn.disabled = true; btn.textContent = 'Szukam…';
   results = [];
@@ -524,7 +531,7 @@ $('#c-find-go').addEventListener('click', async () => {
     const file = wiki.query?.pages?.[0]?.pageprops?.page_image_free;
     const titles = file ? [`File:${file}`] : [];
     const search = await mw('commons.wikimedia.org', { action: 'query', list: 'search', srnamespace: '6', srlimit: '12', srsearch: `"${name}" filetype:bitmap` });
-    // z wyszukiwarki Commons tylko pliki z imieniem i nazwiskiem w nazwie (opis bywa o kimś innym)
+    // z wyszukiwarki Commons tylko pliki, które mają w nazwie wszystkie szukane słowa (opis bywa o czymś innym)
     const words = normalizeWord(name).split(/[^a-z0-9]+/).filter((w) => w.length > 2);
     titles.push(...(search.query?.search || []).map((x: any) => x.title).filter((t: string) => words.every((w) => normalizeWord(t).includes(w))));
     if (titles.length) {
@@ -544,7 +551,7 @@ $('#c-find-go').addEventListener('click', async () => {
       await setCover(blob, 'wikimedia', r.credit);
     } catch { toast('Nie udało się pobrać zdjęcia.', true); }
   }));
-  btn.disabled = false; btn.textContent = 'Szukaj w Wikipedii';
+  btn.disabled = false; btn.textContent = 'Wikipedia';
 });
 $('#gal-in').addEventListener('change', async (e) => {
   const files = [...((e.target as HTMLInputElement).files || [])];
