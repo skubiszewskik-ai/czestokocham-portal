@@ -69,6 +69,7 @@ let redaktorResult = null;
 if (args.has('--redaktor') || build.redaktorRequested) {
   log('wirtualny redaktor…');
   const seenCol = firestore.collection('redaktor_seen');
+  let cityCache = null;
   const store = {
     recent: async (since) =>
       (await firestore.collection('articles').where('publishedAt', '>=', since).select('title', 'lead', 'body', 'status').get())
@@ -95,6 +96,11 @@ if (args.has('--redaktor') || build.redaktorRequested) {
     },
     photos: async () => (await firestore.collection('photos').get()).docs.map((d) => ({ id: d.id, ...plainTs(d.data()) })),
     usePhoto: (id) => firestore.collection('photos').doc(id).update({ lastUsedAt: FieldValue.serverTimestamp() }),
+    // archiwum zdjęć miasta: zaimportowane aktualności czestochowa.pl (jedno zapytanie na uruchomienie)
+    cityArticles: async () => (cityCache ||= (await firestore.collection('articles').where('source.name', '==', 'czestochowa.pl')
+      .select('title', 'lead', 'cover', 'gallery', 'photoCredit', 'publishedAt', 'status').get()).docs
+      .map((d) => ({ slug: d.id, ...d.data() })).filter((a) => a.status === 'published')
+      .sort((a, b) => (b.publishedAt?.toMillis?.() || 0) - (a.publishedAt?.toMillis?.() || 0))),
     pending: async () =>
       (await firestore.collection('articles').where('origin', '==', 'redaktor').where('status', '==', 'draft').select('publishedAt').get())
         .docs.map((d) => ({ slug: d.id, publishedAt: d.get('publishedAt')?.toMillis() || 0 })),

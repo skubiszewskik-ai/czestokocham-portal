@@ -203,9 +203,9 @@ const ic = (k: keyof typeof I) => `<svg viewBox="0 0 24 24" width="20" height="2
                     </div>
                     <div class="cbox" id="c-find-box" hidden>
                       <label>Czego szukasz<input id="c-person" type="search" enterkeyhint="search" placeholder="np. komenda policji Myszków, Tomasz Kaczmarek" /></label>
-                      <div class="cbtns"><a class="btn red" id="c-google" target="_blank" rel="noopener"><Fragment set:html={ic('ext')} /> Szukaj w Google Grafika</a><button type="button" class="btn ghost" id="c-find-go">Wikipedia</button></div>
+                      <div class="cbtns"><a class="btn red" id="c-google" target="_blank" rel="noopener"><Fragment set:html={ic('ext')} /> Szukaj w Google Grafika</a><button type="button" class="btn ghost" id="c-city-go">Zdjęcia miasta</button><button type="button" class="btn ghost" id="c-find-go">Wikipedia</button></div>
                       <div id="c-res" class="thumbs pick"></div>
-                      <small class="hint" id="c-res-n">W Google: prawy klik na zdjęciu → „Kopiuj obraz”, wróć tu i naciśnij ⌘V, potem wpisz autora zdjęć. Zdjęcia z Wikipedii mają wolną licencję – podpis uzupełni się sam.</small>
+                      <small class="hint" id="c-res-n">„Zdjęcia miasta” szuka w zdjęciach Urzędu Miasta z zaimportowanych aktualności czestochowa.pl (np. Politechnika, Aleje, Raków). W Google: prawy klik na zdjęciu → „Kopiuj obraz”, wróć tu i naciśnij ⌘V, potem wpisz autora zdjęć. Przy zdjęciach miasta i z Wikipedii podpis uzupełni się sam.</small>
                     </div>
                     <label>Opis zdjęcia (alt)<input name="coverAlt" placeholder="Co widać na zdjęciu" /></label>
                     <label>Autor zdjęć<input name="photoCredit" placeholder="np. Jan Kowalski" /></label>
@@ -350,7 +350,7 @@ const ic = (k: keyof typeof I) => `<svg viewBox="0 0 24 24" width="20" height="2
           <div class="grid2"><label>Waga rotacji<input name="weight" type="number" min="1" max="10" value="1" /></label><label class="switch top"><input name="active" type="checkbox" checked /><span class="sw"></span> Aktywny</label></div>
           <div><div class="lbl" id="dim-d">Grafika – komputer</div><div id="ad-d" class="adprev"></div><label class="drop small" data-drop="ad-d"><span><strong>Wybierz plik</strong> lub upuść</span><input id="ad-d-in" type="file" accept="image/*" /></label></div>
           <div id="ad-m-wrap"><div class="lbl" id="dim-m">Grafika – telefon</div><div id="ad-m" class="adprev"></div><label class="drop small" data-drop="ad-m"><span><strong>Wybierz plik</strong> lub upuść</span><input id="ad-m-in" type="file" accept="image/*" /></label></div>
-          <p class="hint">Grafika w podanym wymiarze albo dwukrotnie większa. JPG/PNG zamieniamy na WebP, GIF zostaje bez zmian.</p>
+          <p class="hint">Najlepiej grafika w podanym wymiarze albo dwukrotnie większa. Każdą inną możesz wgrać i wykadrować – panel dopasuje ją do miejsca. JPG/PNG zamieniamy na WebP, GIF w dokładnym wymiarze zostaje animowany.</p>
         </div>
         <div class="drawer-f"><button class="btn ghost danger" type="button" id="ad-del" hidden>Usuń</button><span class="grow"></span><button class="btn red" type="submit">Zapisz baner</button></div>
       </form>
@@ -362,8 +362,8 @@ const ic = (k: keyof typeof I) => `<svg viewBox="0 0 24 24" width="20" height="2
       <div class="cf-b"><button class="btn ghost" value="no" id="cf-no">Anuluj</button><button class="btn red" value="yes" id="cf-yes">Usuń</button></div>
     </dialog>
     <dialog id="crop" class="crop">
-      <h2>Wykadruj zdjęcie główne</h2>
-      <p>Przeciągnij zdjęcie, żeby ustawić kadr. Suwakiem albo kółkiem myszy powiększysz. Tak zdjęcie pokaże się na stronie i w listach.</p>
+      <h2 id="crop-t">Wykadruj zdjęcie główne</h2>
+      <p id="crop-p">Przeciągnij zdjęcie, żeby ustawić kadr. Suwakiem albo kółkiem myszy powiększysz. Tak zdjęcie pokaże się na stronie i w listach.</p>
       <div class="crop-stage" id="crop-stage"><img id="crop-img" alt="" draggable="false" /></div>
       <label class="crop-z"><span>Powiększenie</span><input id="crop-zoom" type="range" min="1" max="4" step="0.01" value="1" /></label>
       <div class="cf-b"><button type="button" class="btn ghost" id="crop-reset">Od nowa</button><button type="button" class="btn ghost" id="crop-no">Anuluj</button><button type="button" class="btn red" id="crop-yes">Gotowe</button></div>

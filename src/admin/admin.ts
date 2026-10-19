@@ -384,8 +384,11 @@ function renderCover() {
 // ---------------- kadrowanie zdjęcia głównego ----------------
 // Strona pokazuje zdjęcie główne w proporcji 16:9 – redakcja sama ustawia kadr (przeciąganie + powiększenie).
 // Stan trzymamy w pikselach oryginału: środek kadru (cx, cy) i powiększenie z (1 = największy możliwy kadr).
+// Banery: inne proporcje (np. 970×250) i stały wymiar wyniku (`out`).
 const CROP_MAX_W = 1600;
-function cropBox(file: Blob): Promise<Blob | null> {
+type CropOpts = { aspect?: readonly [number, number]; out?: readonly [number, number]; title?: string; text?: string };
+const CROP_TEXT = { title: 'Wykadruj zdjęcie główne', text: 'Przeciągnij zdjęcie, żeby ustawić kadr. Suwakiem albo kółkiem myszy powiększysz. Tak zdjęcie pokaże się na stronie i w listach.' };
+function cropBox(file: Blob, opts: CropOpts = {}): Promise<Blob | null> {
   return new Promise(async (resolve) => {
     let bmp: ImageBitmap;
     try { bmp = await createImageBitmap(file); } catch { toast('Nie udało się odczytać zdjęcia.', true); return resolve(null); }
@@ -393,11 +396,15 @@ function cropBox(file: Blob): Promise<Blob | null> {
     const stage = $('#crop-stage');
     const img = $('#crop-img') as HTMLImageElement;
     const zoom = $('#crop-zoom') as HTMLInputElement;
+    const [ax, ay] = opts.aspect || [16, 9];
+    $('#crop-t').textContent = opts.title || CROP_TEXT.title;
+    $('#crop-p').textContent = opts.text || CROP_TEXT.text;
+    stage.style.aspectRatio = `${ax} / ${ay}`;
     const bw = bmp.width, bh = bmp.height;
-    const full = Math.min(bw, (bh * 16) / 9); // szerokość kadru przy z = 1
+    const full = Math.min(bw, (bh * ax) / ay); // szerokość kadru przy z = 1
     let z = 1, cx = 0, cy = 0;
-    const size = () => { const cw = full / z; return [cw, (cw * 9) / 16]; };
-    const reset = () => { z = 1; const [, ch] = size(); cx = bw / 2; cy = ch / 2 + (bh - ch) * 0.2; draw(); };
+    const size = () => { const cw = full / z; return [cw, (cw * ay) / ax]; };
+    const reset = () => { z = 1; const [, ch] = size(); cx = bw / 2; cy = ch / 2 + (bh - ch) * (opts.aspect ? 0.5 : 0.2); draw(); };
     const draw = () => {
       const [cw, ch] = size();
       cx = Math.min(Math.max(cx, cw / 2), bw - cw / 2);
@@ -436,8 +443,8 @@ function cropBox(file: Blob): Promise<Blob | null> {
       URL.revokeObjectURL(url);
       if (!ok) return resolve(null);
       const [cw, ch] = size();
-      const w = Math.round(Math.min(CROP_MAX_W, cw));
-      const h = Math.round((w * 9) / 16);
+      const w = opts.out ? opts.out[0] : Math.round(Math.min(CROP_MAX_W, cw));
+      const h = opts.out ? opts.out[1] : Math.round((w * ay) / ax);
       const c = document.createElement('canvas');
       c.width = w; c.height = h;
       const ctx = c.getContext('2d')!;
@@ -697,6 +704,40 @@ $('#c-find-go').addEventListener('click', async () => {
   }));
   btn.disabled = false; btn.textContent = 'Wikipedia';
 });
+// Archiwum zdjęć miasta: zdjęcia Urzędu Miasta z zaimportowanych aktualności czestochowa.pl (pliki są już na naszej stronie)
+const CITY_STOP = new Set(['czestochowa', 'czestochowie', 'czestochowy', 'czestochowski', 'czestochowska', 'czestochowskiej', 'miasto', 'miasta', 'oraz', 'dla']);
+let cityHits: { url: string; credit: string }[] = [];
+$('#c-city-go').addEventListener('click', async () => {
+  const words = keywordsFor(personName() || F('title').value).filter((w) => !CITY_STOP.has(w)).slice(0, 10);
+  if (!words.length) return toast('Wpisz, czego szukasz, np. Politechnika, Aleje, Raków.', true);
+  const btn = $('#c-city-go') as HTMLButtonElement;
+  btn.disabled = true; btn.textContent = 'Szukam…';
+  cityHits = [];
+  try {
+    const snap = await getDocs(query(collection(db, 'articles'), where('keywords', 'array-contains-any', words), limit(60)));
+    const arts = snap.docs.map((d) => ({ slug: d.id, ...(d.data() as any) }))
+      .filter((a) => a.source?.name === 'czestochowa.pl')
+      .map((a) => ({ a, score: words.filter((w) => a.keywords?.includes(w)).length }))
+      .sort((x, y) => y.score - x.score || (toDate(y.a.publishedAt)?.getTime() || 0) - (toDate(x.a.publishedAt)?.getTime() || 0));
+    const credit = (c?: string) => `${(c || '').replace(/^fot\.\s*/i, '').trim() || 'UM Częstochowa'} / czestochowa.pl`;
+    for (const { a } of arts) {
+      for (const img of [a.cover, ...(a.gallery || [])]) {
+        const big = img?.srcset?.[img.srcset.length - 1];
+        if (big && cityHits.length < 36) cityHits.push({ url: big.url, credit: credit(a.photoCredit) });
+      }
+    }
+  } catch (err: any) { toast(err.message, true); }
+  $('#c-res').innerHTML = cityHits.map((r, i) => `<figure><button type="button" data-city="${i}" title="${esc(r.credit)}"><img src="${esc(r.url)}" alt="" loading="lazy"></button></figure>`).join('');
+  $('#c-res-n').textContent = cityHits.length
+    ? 'Kliknij zdjęcie, aby ustawić je jako główne – potem wykadrujesz. Podpis (autor / czestochowa.pl) uzupełni się sam.'
+    : 'Brak zdjęć miasta do tego hasła. Spróbuj krótszego słowa (np. „Politechnika”, „tramwaj”) albo poszukaj w Wikipedii lub Google.';
+  $$('#c-res [data-city]').forEach((b) => b.addEventListener('click', async () => {
+    const r = cityHits[+b.dataset.city!];
+    try { await setCover(await (await fetch(r.url)).blob(), 'miasto', r.credit); }
+    catch { toast('Nie udało się pobrać zdjęcia.', true); }
+  }));
+  btn.disabled = false; btn.textContent = 'Zdjęcia miasta';
+});
 $('#gal-in').addEventListener('change', async (e) => {
   const files = [...((e.target as HTMLInputElement).files || [])];
   busy('#gal-in', true);
@@ -843,15 +884,28 @@ $('#ad-cancel').addEventListener('click', () => drawer(false));
 $('#ad-scrim').addEventListener('click', () => drawer(false));
 addEventListener('keydown', (e) => { if (e.key === 'Escape') drawer(false); });
 
-async function uploadBanner(file: File, need: readonly [number, number]): Promise<Variant> {
+// Grafika w dokładnym wymiarze (albo 2×) idzie bez zmian; każdą inną redakcja kadruje do proporcji miejsca,
+// a panel skaluje ją do wymiaru miejsca (2×, gdy oryginał jest dość duży – ostro na ekranach retina).
+async function uploadBanner(file: File, need: readonly [number, number]): Promise<Variant | null> {
   const bmp = await createImageBitmap(file);
   const [w, h] = need;
-  const ok = (bmp.width === w && bmp.height === h) || (bmp.width === w * 2 && bmp.height === h * 2);
-  if (!ok) throw new Error(`Zły wymiar: ${bmp.width}×${bmp.height} px. Wymagane ${w}×${h} px (albo ${w * 2}×${h * 2} px).`);
+  const exact = (bmp.width === w && bmp.height === h) || (bmp.width === w * 2 && bmp.height === h * 2);
   const stamp = Date.now().toString(36);
-  let blob: Blob = file, ext = 'gif', type = 'image/gif';
-  if (file.type !== 'image/gif') { blob = (await toWebp(file, bmp.width, 0.86)).blob; ext = 'webp'; type = 'image/webp'; }
-  return { w, h, url: await stage(`ads/${stamp}-${w}x${h}.${ext}`, blob, type) };
+  if (exact && file.type === 'image/gif') return { w, h, url: await stage(`ads/${stamp}-${w}x${h}.gif`, file, 'image/gif') };
+  let input: Blob = file;
+  if (!exact) {
+    const out: [number, number] = bmp.width >= w * 2 && bmp.height >= h * 2 ? [w * 2, h * 2] : [w, h];
+    const cropped = await cropBox(file, {
+      aspect: need, out,
+      title: `Dopasuj grafikę do miejsca ${w}×${h} px`,
+      text: `Grafika ma ${bmp.width}×${bmp.height} px. Przeciągnij i powiększ, żeby ustawić, co ma być widać w banerze.${file.type === 'image/gif' ? ' Animacja GIF po kadrowaniu będzie nieruchoma.' : ''}`,
+    });
+    if (!cropped) return null;
+    input = cropped;
+  }
+  let { blob } = await toWebp(input, exact ? bmp.width : Infinity, 0.86);
+  if (blob.size > 680 * 1024) blob = (await toWebp(input, exact ? bmp.width : Infinity, 0.7)).blob;
+  return { w, h, url: await stage(`ads/${stamp}-${w}x${h}.webp`, blob, 'image/webp') };
 }
 for (const which of ['d', 'm'] as const) {
   $(`#ad-${which}-in`).addEventListener('change', async (e) => {
@@ -863,8 +917,10 @@ for (const which of ['d', 'm'] as const) {
     busy(`#ad-${which}-in`, true);
     try {
       const v = await uploadBanner(file, need);
-      if (which === 'd') adCur.desktop = v; else adCur.mobile = v;
-      renderAdPrev(); toast('Grafika gotowa');
+      if (v) {
+        if (which === 'd') adCur.desktop = v; else adCur.mobile = v;
+        renderAdPrev(); toast('Grafika gotowa');
+      }
     } catch (err: any) { toast(err.message, true); }
     busy(`#ad-${which}-in`, false);
   });
@@ -906,7 +962,7 @@ $('#ad-del').addEventListener('click', async () => {
 });
 
 // ---------------- redaktor AI ----------------
-const IMG_SRC: Record<string, string> = { bank: 'bank zdjęć redakcji', wikimedia: 'Wikimedia Commons', wikipedia: 'Wikipedia', openverse: 'Openverse (Creative Commons)', ai: 'ilustracja AI', plansza: 'plansza z tytułem', zrodlo: 'zdjęcie z artykułu źródłowego', wlasne: 'wgrane przez redakcję' };
+const IMG_SRC: Record<string, string> = { miasto: 'archiwum zdjęć czestochowa.pl', bank: 'bank zdjęć redakcji', wikimedia: 'Wikimedia Commons', wikipedia: 'Wikipedia', openverse: 'Openverse (Creative Commons)', ai: 'ilustracja AI', plansza: 'plansza z tytułem', zrodlo: 'zdjęcie z artykułu źródłowego', wlasne: 'wgrane przez redakcję' };
 async function redCount() {
   const snap = await getDocs(query(collection(db, 'articles'), where('origin', '==', 'redaktor'), where('status', '==', 'draft')));
   $('#red-n').textContent = String(snap.size);
