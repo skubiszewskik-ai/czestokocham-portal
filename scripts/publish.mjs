@@ -188,9 +188,19 @@ if (!args.has('--no-deploy')) {
   execSync('npx firebase deploy --only hosting --project czestokocham --non-interactive --message "publikacja automatyczna"', { stdio: 'inherit' });
 }
 
-// 6. porządki
-await Promise.all(uploads.docs.map((d) => d.ref.delete()));
-await Promise.all(coverDone.map(([ref, upd]) => ref.update(upd)));
+// 6. porządki. W GitHub Actions kolejkę zdjęć z panelu czyści dopiero scripts/finish.mjs po udanym zapisie w repozytorium –
+// inaczej nieudany push gubił wgrane zdjęcia (plik był tylko na maszynie automatu)
+const cleanup = {
+  uploads: uploads.docs.map((d) => d.id),
+  covers: coverDone.map(([ref, upd]) => [ref.id, upd.coverCandidate ? { ...upd, coverCandidate: { ...upd.coverCandidate, at: null } } : upd]),
+};
+if (process.env.GITHUB_ACTIONS) {
+  await fs.mkdir('.cache', { recursive: true });
+  await fs.writeFile('.cache/cleanup.json', JSON.stringify(cleanup));
+} else {
+  const { finish } = await import('./finish.mjs');
+  await finish(cleanup);
+}
 const update = { dirty: false, importRequested: false, lastBuild: startedAt };
 if (importResult) update.lastImportDay = warsawNow().day;
 if (redaktorResult) Object.assign(update, { redaktorRequested: false, lastRedaktorAt: startedAt });

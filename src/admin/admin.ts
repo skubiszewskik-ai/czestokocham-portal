@@ -167,6 +167,22 @@ async function stage(path: string, blob: Blob, contentType: string): Promise<str
   preview.set(url, URL.createObjectURL(blob));
   return url;
 }
+// zdjęcie wgrane, ale jeszcze nieopublikowane (np. po odświeżeniu panelu) – podgląd prosto z kolejki „uploads”
+const tried = new Set<string>();
+document.addEventListener('error', async (e) => {
+  const img = e.target as HTMLImageElement;
+  if (img?.tagName !== 'IMG') return;
+  const path = new URL(img.src, location.href).pathname.match(/^\/media\/(.+)$/)?.[1];
+  if (!path || tried.has(path)) return;
+  tried.add(path);
+  try {
+    const hit = (await getDocs(query(collection(db, 'uploads'), where('path', '==', decodeURIComponent(path)), limit(1)))).docs[0];
+    if (!hit) return;
+    const url = `/media/${path}`;
+    preview.set(url, `data:${hit.get('contentType') || 'image/webp'};base64,${hit.get('data')}`);
+    img.src = preview.get(url)!;
+  } catch {}
+}, true);
 async function uploadPhoto(file: Blob, base: string, alt: string, widths: number[]): Promise<Img> {
   const stamp = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   const srcset: Variant[] = [];
