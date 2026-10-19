@@ -7,7 +7,9 @@ Statyczny portal w Astro hostowany na Firebase Hosting (plan Spark, bez opłat).
 - **Automat:** GitHub Actions (`.github/workflows/publish.yml`), co 30 min (6:00–23:30):
   - publikuje zmiany zapisane w panelu,
   - codziennie po 15:00 importuje aktualności z czestochowa.pl i wczestochowie.pl (zdjęcia → WebP, dopisek „Źródło: …”; z wczestochowie.pl przez WordPress REST API, bez artykułów sponsorowanych, ostatnie 3 dni).
-  - co 2 godziny (7–21) uruchamia **wirtualnego redaktora** (`lib/redaktor.js`): czyta lokalne portale (`lib/sources.js`), odsiewa powtórki i tematy, które już mamy, a z nowych pisze przez darmowe AI (`lib/llm.js`: Google Gemini, zapasowo Groq) własne teksty jako **szkice** do akceptu w zakładce *Redaktor AI*. Zdjęć konkurencji nie używa (`lib/images.js`: bank zdjęć redakcji → Wikimedia Commons z podpisem → opcjonalnie ilustracja AI → plansza z tytułem).
+  - co 2 godziny (7–21) uruchamia **wirtualnego redaktora** (`lib/redaktor.js`): czyta lokalne portale (`lib/sources.js`), odsiewa powtórki i tematy, które już mamy, a z nowych pisze przez darmowe AI (`lib/llm.js`: Google Gemini, zapasowo Groq) własne teksty jako **szkice** do akceptu w zakładce *Redaktor AI*. Zdjęcie główne (`lib/images.js`): bank zdjęć redakcji → Wikimedia Commons z podpisem → opcjonalnie ilustracja AI → plansza z tytułem. Gdy tekst dotyczy konkretnej osoby: tylko jej prawdziwe zdjęcie (Wikipedia → Commons → zdjęcie z artykułu źródłowego z podpisem portalu), nigdy AI; bez zdjęcia szkic dostaje oznaczenie „brak zdjęcia osoby”.
+  - w edytorze: wklejanie zdjęcia głównego ze schowka (⌘V), szukanie zdjęcia osoby w Wikipedii i zamawianie nowej ilustracji AI (robi ją automat przy najbliższej publikacji).
+  - czas publikacji artykułów z czestochowa.pl = godzina wgrania ich zdjęć (strona podaje tylko datę).
 - **Zdjęcia:** `public/media` (w repozytorium), dane: `data/` – zapisuje je automat.
 
 ## Ręcznie

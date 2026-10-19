@@ -7,6 +7,7 @@ import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { db, warsawNow } from '../lib/firestore.js';
 import { importLatest, importWczestochowie } from '../lib/importer.js';
 import { runRedaktor } from '../lib/redaktor.js';
+import { aiCandidate } from '../lib/images.js';
 
 const args = new Set(process.argv.slice(2));
 const firestore = db();
@@ -110,6 +111,30 @@ if (args.has('--redaktor') || build.redaktorRequested) {
   log(`redaktor: nowych szkiców ${redaktorResult.drafts.length}, pominiętych ${redaktorResult.skipped.length}, powtórek ${redaktorResult.duplicates}, błędów ${redaktorResult.errors.length}`);
 }
 
+// 1c. nowe ilustracje AI zamówione w panelu (generator blokuje zapytania z przeglądarki, więc robi je automat)
+// gotowość zapisujemy dopiero po wdrożeniu – wtedy podgląd w panelu już się wczyta
+const coverJobs = await firestore.collection('articles').where('coverPending', '==', true).get();
+const coverDone = [];
+for (const d of coverJobs.docs) {
+  const { title = '', coverRequest = {} } = d.data();
+  const store = {
+    saveImage: async (p, buf) => {
+      const full = path.join(MEDIA, p);
+      await fs.mkdir(path.dirname(full), { recursive: true });
+      await fs.writeFile(full, buf);
+      return `/media/${p}`;
+    },
+  };
+  try {
+    const image = await aiCandidate(store, { slug: d.id, title, prompt: coverRequest.prompt });
+    coverDone.push([d.ref, { coverPending: false, coverCandidate: { image, prompt: coverRequest.prompt || title, at: FieldValue.serverTimestamp() }, coverError: null }]);
+    log(`nowa ilustracja AI: ${d.id}`);
+  } catch (e) {
+    coverDone.push([d.ref, { coverPending: false, coverError: e.message }]);
+    log(`ilustracja AI ${d.id}: ${e.message}`);
+  }
+}
+
 // 2. zdjęcia wgrane w panelu (czekają w kolekcji „uploads” jako base64)
 const uploads = await firestore.collection('uploads').get();
 for (const d of uploads.docs) {
@@ -165,6 +190,7 @@ if (!args.has('--no-deploy')) {
 
 // 6. porządki
 await Promise.all(uploads.docs.map((d) => d.ref.delete()));
+await Promise.all(coverDone.map(([ref, upd]) => ref.update(upd)));
 const update = { dirty: false, importRequested: false, lastBuild: startedAt };
 if (importResult) update.lastImportDay = warsawNow().day;
 if (redaktorResult) Object.assign(update, { redaktorRequested: false, lastRedaktorAt: startedAt });

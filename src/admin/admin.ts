@@ -140,15 +140,18 @@ async function buildStatus() {
 }
 
 // ---------------- obrazy → WebP ----------------
-async function toWebp(file: Blob, width: number, quality = 0.78): Promise<{ blob: Blob; w: number; h: number }> {
+// crop169: pionowe zdjęcie przycinamy do 16:9 z górnej części (tam zwykle jest twarz) – listy i tak pokazują kadr poziomy
+async function toWebp(file: Blob, width: number, quality = 0.78, crop169 = false): Promise<{ blob: Blob; w: number; h: number }> {
   const bmp = await createImageBitmap(file);
+  const sh = crop169 && bmp.width / bmp.height < 1.2 ? Math.round((bmp.width * 9) / 16) : bmp.height;
+  const sy = Math.round((bmp.height - sh) * 0.2);
   const w = Math.min(width, bmp.width);
-  const h = Math.round((bmp.height * w) / bmp.width);
+  const h = Math.round((sh * w) / bmp.width);
   const c = document.createElement('canvas');
   c.width = w; c.height = h;
   const ctx = c.getContext('2d')!;
   ctx.imageSmoothingQuality = 'high';
-  ctx.drawImage(bmp, 0, 0, w, h);
+  ctx.drawImage(bmp, 0, sy, bmp.width, sh, 0, 0, w, h);
   const blob: Blob = await new Promise((res, rej) => c.toBlob((b) => (b ? res(b) : rej(new Error('Przeglądarka nie obsługuje WebP'))), 'image/webp', quality));
   return { blob, w, h };
 }
@@ -164,12 +167,12 @@ async function stage(path: string, blob: Blob, contentType: string): Promise<str
   preview.set(url, URL.createObjectURL(blob));
   return url;
 }
-async function uploadPhoto(file: File, base: string, alt: string, widths: number[]): Promise<Img> {
+async function uploadPhoto(file: Blob, base: string, alt: string, widths: number[]): Promise<Img> {
   const stamp = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   const srcset: Variant[] = [];
   const bmp = await createImageBitmap(file);
   for (const width of [...new Set(widths.map((w) => Math.min(w, bmp.width)))]) {
-    const { blob, w, h } = await toWebp(file, width, width > 1000 ? 0.72 : 0.78);
+    const { blob, w, h } = await toWebp(file, width, width > 1000 ? 0.72 : 0.78, widths === COVER_W);
     srcset.push({ w, h, url: await stage(`${base}/${stamp}-${w}.webp`, blob, 'image/webp') });
   }
   const big = srcset[srcset.length - 1];
@@ -284,7 +287,7 @@ $('#a-more').addEventListener('click', () => loadArticles());
 $('#a-new').addEventListener('click', () => openEditor(null));
 
 // ---------------- edytor ----------------
-let current: { id: string | null; cover: Img | null; gallery: Img[]; data: any } = { id: null, cover: null, gallery: [], data: {} };
+let current: { id: string | null; cover: Img | null; gallery: Img[]; data: any; imageSource: string | null } = { id: null, cover: null, gallery: [], data: {}, imageSource: null };
 const form = $('#e-form') as HTMLFormElement;
 const F = (n: string) => form.elements.namedItem(n) as HTMLInputElement;
 const localInput = (d: Date) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
@@ -292,7 +295,7 @@ const grow = () => { const t = F('title'); t.style.height = 'auto'; t.style.heig
 
 async function openEditor(id: string | null) {
   form.reset();
-  current = { id, cover: null, gallery: [], data: {} };
+  current = { id, cover: null, gallery: [], data: {}, imageSource: null };
   if (id) current.data = (await getDoc(doc(db, 'articles', id))).data() || {};
   const d = current.data;
   show('editor');
@@ -320,7 +323,9 @@ async function openEditor(id: string | null) {
   }
   $('#e-approve').hidden = !ai || d.status !== 'draft';
   current.cover = d.cover || null;
+  current.imageSource = d.imageSource || null;
   current.gallery = d.gallery || [];
+  resetCoverTools(d);
   renderCover(); renderGallery(); updateView();
   $('#e-del').hidden = !id;
   requestAnimationFrame(grow);
@@ -351,13 +356,195 @@ function renderGallery() {
   $$('#gal [data-rm]').forEach((b) => b.addEventListener('click', () => { current.gallery.splice(+b.dataset.rm!, 1); renderGallery(); }));
 }
 const slugBase = () => `u/${F('slug').value || 'nowy'}`;
+const AI_CREDIT = 'Ilustracja wygenerowana przez AI';
+/** Nowe zdjęcie główne z pliku, schowka, generatora AI albo Wikipedii; credit === undefined → podpis wpisuje redakcja */
+async function setCover(file: Blob, source: string, credit?: string) {
+  busy('#cover-in', true);
+  try {
+    current.cover = await uploadPhoto(file, slugBase(), F('coverAlt').value || F('title').value, COVER_W);
+    current.imageSource = source;
+    if (credit !== undefined) F('photoCredit').value = credit;
+    else if (F('photoCredit').value === AI_CREDIT || current.data.photoCredit === F('photoCredit').value) F('photoCredit').value = '';
+    renderCover();
+    $('#c-note').hidden = true;
+    toast(credit === undefined ? 'Zdjęcie główne podmienione – wpisz autora zdjęć' : 'Zdjęcie główne podmienione');
+    if (credit === undefined) F('photoCredit').focus();
+  } catch (err: any) { toast(err.message, true); }
+  busy('#cover-in', false);
+}
 $('#cover-in').addEventListener('change', async (e) => {
   const file = (e.target as HTMLInputElement).files?.[0];
-  if (!file) return;
-  busy('#cover-in', true);
-  try { current.cover = await uploadPhoto(file, slugBase(), F('coverAlt').value || F('title').value, COVER_W); renderCover(); toast('Zdjęcie główne dodane'); }
-  catch (err: any) { toast(err.message, true); }
-  busy('#cover-in', false);
+  if (file) await setCover(file, 'wlasne');
+  (e.target as HTMLInputElement).value = '';
+});
+
+// wklejanie ze schowka (⌘V / Ctrl+V) – obraz trafia do zdjęcia głównego
+const imageFrom = (dt: DataTransfer | null) => [...(dt?.files || [])].find((f) => f.type.startsWith('image/')) || null;
+document.addEventListener('paste', async (e: ClipboardEvent) => {
+  if ($('#v-editor').hidden) return;
+  const target = e.target as HTMLElement;
+  const inText = !!target.closest?.('#rte, input, textarea');
+  const text = e.clipboardData?.getData('text/plain')?.trim() || '';
+  const img = imageFrom(e.clipboardData);
+  // w treści lub polu tekstowym wklejony tekst zostaje tekstem (Word dokłada obrazek akapitu)
+  if (inText && (text || !img)) return;
+  if (img) {
+    e.preventDefault(); e.stopPropagation();
+    return setCover(img, 'wlasne');
+  }
+  // „Kopiuj adres obrazu” – spróbujemy pobrać; wiele stron na to nie pozwala
+  const url = /^https?:\/\/\S+$/.test(text) ? text : new DOMParser().parseFromString(e.clipboardData?.getData('text/html') || '', 'text/html').querySelector('img')?.src;
+  if (!url) return;
+  e.preventDefault();
+  try {
+    const res = await fetch(url);
+    const blob = await res.blob();
+    if (!res.ok || !blob.type.startsWith('image/')) throw new Error();
+    await setCover(blob, 'wlasne');
+  } catch { toast('Ta strona nie pozwala pobrać zdjęcia z adresu. Kliknij zdjęcie prawym przyciskiem → „Kopiuj obraz” i wklej ponownie.', true); }
+}, true);
+
+// ---------------- narzędzia zdjęcia głównego: nowa ilustracja AI, zdjęcie osoby ----------------
+const personName = () => ($('#c-person') as HTMLInputElement).value.trim();
+function resetCoverTools(d: any) {
+  const person = d.ai?.person?.name || '';
+  ($('#c-person') as HTMLInputElement).value = person;
+  ($('#c-prompt') as HTMLTextAreaElement).value = d.ai?.illustrationPrompt || '';
+  $('#c-ai-box').hidden = !d.coverPending && !d.coverCandidate;
+  renderAiCandidate();
+  $('#c-find-box').hidden = !person;
+  $('#c-res').innerHTML = '';
+  const note = $('#c-note');
+  note.hidden = !person;
+  note.classList.toggle('need', !!d.needsPhoto);
+  note.textContent = d.needsPhoto
+    ? `Artykuł o osobie (${person}) – redaktor nie znalazł jej zdjęcia. Wklej prawdziwe zdjęcie (⌘V) albo wyszukaj poniżej.`
+    : person ? `Artykuł o osobie (${person}) – na miniaturze musi być jej prawdziwe zdjęcie, nie ilustracja AI.` : '';
+  syncCoverTools();
+}
+function syncCoverTools() {
+  const person = personName();
+  const ai = $('#c-ai') as HTMLButtonElement;
+  ai.disabled = !!person;
+  ai.title = person ? 'Artykuł o osobie – użyj jej prawdziwego zdjęcia' : '';
+  if (person) $('#c-ai-box').hidden = true;
+  ($('#c-google') as HTMLAnchorElement).href = `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(person || F('title').value)}`;
+}
+$('#c-person').addEventListener('input', syncCoverTools);
+$('#c-ai').addEventListener('click', () => {
+  const box = $('#c-ai-box');
+  box.hidden = !box.hidden;
+  const p = $('#c-prompt') as HTMLTextAreaElement;
+  if (!p.value) p.value = F('title').value;
+  if (!box.hidden) p.focus();
+});
+$('#c-find').addEventListener('click', () => {
+  const box = $('#c-find-box');
+  box.hidden = !box.hidden;
+  syncCoverTools();
+  if (!box.hidden) ($('#c-person') as HTMLInputElement).focus();
+});
+
+// Generator ilustracji blokuje zapytania z przeglądarki – grafikę robi automat (publikacja uruchamia się od razu),
+// a gotowy podgląd czeka w artykule (coverCandidate), dopóki redakcja go nie użyje.
+let aiPoll = 0;
+function renderAiCandidate() {
+  const d = current.data;
+  const prev = $('#c-ai-prev');
+  const go = $('#c-ai-go') as HTMLButtonElement;
+  clearTimeout(aiPoll);
+  $('#c-ai-use').hidden = !d.coverCandidate || !!d.coverPending;
+  go.disabled = !!d.coverPending;
+  go.textContent = d.coverPending ? 'Generuję…' : d.coverCandidate ? 'Generuj jeszcze raz' : 'Generuj';
+  if (d.coverPending) {
+    prev.className = 'cover wait';
+    prev.textContent = 'Automat tworzy ilustrację – zwykle 2–6 minut. Możesz w tym czasie pracować dalej.';
+    aiPoll = window.setTimeout(async () => {
+      if (!current.id || $('#v-editor').hidden) return;
+      const fresh = (await getDoc(doc(db, 'articles', current.id))).data() || {};
+      Object.assign(current.data, { coverPending: fresh.coverPending, coverCandidate: fresh.coverCandidate, coverError: fresh.coverError });
+      if (!fresh.coverPending && fresh.coverError) toast(`Nie udało się wygenerować ilustracji: ${fresh.coverError}`, true);
+      renderAiCandidate();
+    }, 20000);
+  } else if (d.coverCandidate) {
+    prev.className = 'cover';
+    prev.innerHTML = `<img src="${esc(d.coverCandidate.image.srcset[Math.min(1, d.coverCandidate.image.srcset.length - 1)].url)}" alt="">`;
+  } else { prev.className = 'cover'; prev.innerHTML = ''; }
+}
+$('#c-ai-go').addEventListener('click', async () => {
+  if (!current.id) return toast('Najpierw zapisz artykuł – potem zamów ilustrację.', true);
+  const prompt = ($('#c-prompt') as HTMLTextAreaElement).value.trim() || F('title').value.trim();
+  if (!prompt) return toast('Opisz, co ma być na ilustracji.', true);
+  try {
+    await updateDoc(doc(db, 'articles', current.id), { coverPending: true, coverRequest: { prompt, at: serverTimestamp() }, coverError: null });
+    current.data.coverPending = true;
+    await markDirty();
+    renderAiCandidate();
+    toast('Zamówiono nową ilustrację – podgląd pojawi się tutaj.');
+  } catch (err: any) { toast(err.message, true); }
+});
+$('#c-ai-use').addEventListener('click', () => {
+  const c = current.data.coverCandidate;
+  if (!c) return;
+  current.cover = { ...c.image, alt: F('coverAlt').value || F('title').value };
+  current.imageSource = 'ai';
+  F('photoCredit').value = AI_CREDIT;
+  $('#c-note').hidden = true;
+  renderCover();
+  $('#c-ai-box').hidden = true;
+  toast('Ilustracja ustawiona – zapisz artykuł.');
+});
+
+// Wikipedia i Wikimedia Commons (API pozwala na zapytania z przeglądarki: origin=*)
+type Found = { thumb: string; url: string; credit: string };
+const FREE = /^(CC0|CC BY(-SA)? [\d.]+|Public domain)/i;
+async function mw(host: string, params: Record<string, string>) {
+  const u = new URL(`https://${host}/w/api.php`);
+  Object.entries({ format: 'json', formatversion: '2', origin: '*', ...params }).forEach(([k, v]) => u.searchParams.set(k, v));
+  return (await fetch(u)).json();
+}
+const IMGINFO = { prop: 'imageinfo', iiprop: 'url|extmetadata|size|mime', iiurlwidth: '1600' };
+function found(p: any): Found | null {
+  const ii = p?.imageinfo?.[0];
+  const meta = ii?.extmetadata || {};
+  const license = meta.LicenseShortName?.value || '';
+  if (!ii || !/^image\/(jpeg|png|webp)$/.test(ii.mime) || ii.width < 400 || !FREE.test(license)) return null;
+  const artist = (meta.Artist?.value || '').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim().slice(0, 60) || 'autor nieznany';
+  return { thumb: ii.thumburl.replace(/\/\d+px-/, '/500px-'), url: ii.thumburl || ii.url, credit: `${artist} / Wikimedia Commons, ${license}` };
+}
+let results: Found[] = [];
+$('#c-find-go').addEventListener('click', async () => {
+  const name = personName();
+  if (!name) return toast('Wpisz imię i nazwisko.', true);
+  const btn = $('#c-find-go') as HTMLButtonElement;
+  btn.disabled = true; btn.textContent = 'Szukam…';
+  results = [];
+  try {
+    const wiki = await mw('pl.wikipedia.org', { action: 'query', titles: name, redirects: '1', prop: 'pageprops', ppprop: 'page_image_free' });
+    const file = wiki.query?.pages?.[0]?.pageprops?.page_image_free;
+    const titles = file ? [`File:${file}`] : [];
+    const search = await mw('commons.wikimedia.org', { action: 'query', list: 'search', srnamespace: '6', srlimit: '12', srsearch: `"${name}" filetype:bitmap` });
+    // z wyszukiwarki Commons tylko pliki z imieniem i nazwiskiem w nazwie (opis bywa o kimś innym)
+    const words = normalizeWord(name).split(/[^a-z0-9]+/).filter((w) => w.length > 2);
+    titles.push(...(search.query?.search || []).map((x: any) => x.title).filter((t: string) => words.every((w) => normalizeWord(t).includes(w))));
+    if (titles.length) {
+      const info = await mw('commons.wikimedia.org', { action: 'query', titles: [...new Set(titles)].slice(0, 12).join('|'), ...IMGINFO });
+      const order = new Map(titles.map((t, i) => [t.replace(/_/g, ' '), i]));
+      results = (info.query?.pages || []).sort((a: any, b: any) => (order.get(a.title) ?? 99) - (order.get(b.title) ?? 99)).map(found).filter(Boolean) as Found[];
+    }
+  } catch { toast('Wikipedia nie odpowiada – spróbuj za chwilę.', true); }
+  $('#c-res').innerHTML = results.map((r, i) => `<figure><button type="button" data-pick="${i}" title="${esc(r.credit)}"><img src="${esc(r.thumb)}" alt="" loading="lazy"></button></figure>`).join('');
+  $('#c-res-n').textContent = results.length
+    ? 'Kliknij zdjęcie, aby ustawić je jako główne (sprawdź, czy to ta osoba). Podpis uzupełni się sam.'
+    : 'Brak zdjęć na wolnej licencji. Otwórz Google Grafika, kliknij zdjęcie prawym → „Kopiuj obraz”, wróć tu i naciśnij ⌘V.';
+  $$('#c-res [data-pick]').forEach((b) => b.addEventListener('click', async () => {
+    const r = results[+b.dataset.pick!];
+    try {
+      const blob = await (await fetch(r.url)).blob();
+      await setCover(blob, 'wikimedia', r.credit);
+    } catch { toast('Nie udało się pobrać zdjęcia.', true); }
+  }));
+  btn.disabled = false; btn.textContent = 'Szukaj w Wikipedii';
 });
 $('#gal-in').addEventListener('change', async (e) => {
   const files = [...((e.target as HTMLInputElement).files || [])];
@@ -416,6 +603,9 @@ form.addEventListener('submit', async (e) => {
     photoCredit: F('photoCredit').value.trim() || null,
     source: F('sourceName').value.trim() ? { name: F('sourceName').value.trim(), url: F('sourceUrl').value.trim() } : null,
     cover: current.cover,
+    imageSource: current.imageSource,
+    ...(current.data.coverCandidate && current.cover?.srcset?.[0]?.url === current.data.coverCandidate.image?.srcset?.[0]?.url ? { coverCandidate: null } : {}),
+    needsPhoto: !!current.data.needsPhoto && current.imageSource === 'plansza',
     gallery: current.gallery,
     keywords: keywordsFor(title, lead),
     updatedAt: serverTimestamp(),
@@ -565,7 +755,7 @@ $('#ad-del').addEventListener('click', async () => {
 });
 
 // ---------------- redaktor AI ----------------
-const IMG_SRC: Record<string, string> = { bank: 'bank zdjęć redakcji', wikimedia: 'Wikimedia Commons', ai: 'ilustracja AI', plansza: 'plansza z tytułem' };
+const IMG_SRC: Record<string, string> = { bank: 'bank zdjęć redakcji', wikimedia: 'Wikimedia Commons', ai: 'ilustracja AI', plansza: 'plansza z tytułem', zrodlo: 'zdjęcie z artykułu źródłowego', wlasne: 'wgrane przez redakcję' };
 async function redCount() {
   const snap = await getDocs(query(collection(db, 'articles'), where('origin', '==', 'redaktor'), where('status', '==', 'draft')));
   $('#red-n').textContent = String(snap.size);
@@ -587,7 +777,7 @@ async function loadRedaktor() {
     return `<div class="rcard" data-rid="${esc(id)}">
       <span class="rcard-img" style="${img ? `background-image:url('${esc(src(img))}')` : ''}"></span>
       <div class="rcard-b">
-        <span class="rcard-m">${tagHtml(d.category)}<span>${fmt(toDate(d.publishedAt))}</span><span>· na podstawie <a href="${esc(d.basedOn?.url)}" target="_blank" rel="noopener">${esc(d.basedOn?.name)}</a></span><span>· zdjęcie: ${esc(IMG_SRC[d.imageSource] || '—')}</span>${d.copyRisk ? `<span class="pill off" title="Tyle zwrotów pokrywa się ze źródłem – przeredaguj przed publikacją">podobny do źródła ${d.copyRisk}%</span>` : ''}</span>
+        <span class="rcard-m">${tagHtml(d.category)}<span>${fmt(toDate(d.publishedAt))}</span><span>· na podstawie <a href="${esc(d.basedOn?.url)}" target="_blank" rel="noopener">${esc(d.basedOn?.name)}</a></span><span>· zdjęcie: ${esc(IMG_SRC[d.imageSource] || '—')}</span>${d.needsPhoto ? `<span class="pill off" title="Artykuł o osobie – wklej jej prawdziwe zdjęcie">brak zdjęcia osoby</span>` : ''}${d.copyRisk ? `<span class="pill off" title="Tyle zwrotów pokrywa się ze źródłem – przeredaguj przed publikacją">podobny do źródła ${d.copyRisk}%</span>` : ''}</span>
         <span class="rcard-t">${esc(d.title)}</span>
         <span class="rcard-l">${esc(d.lead)}</span>
         <span class="rcard-a">

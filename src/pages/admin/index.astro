@@ -186,8 +186,25 @@ const ic = (k: keyof typeof I) => `<svg viewBox="0 0 24 24" width="20" height="2
                   </div>
                   <div class="card">
                     <h2 class="ch">Zdjęcie główne</h2>
+                    <p class="cnote" id="c-note" hidden></p>
                     <div id="cover" class="cover"></div>
-                    <label class="drop small" data-drop="cover"><Fragment set:html={ic('img')} /><span><strong>Wybierz</strong> lub upuść zdjęcie</span><input id="cover-in" type="file" accept="image/*" /></label>
+                    <label class="drop small" data-drop="cover"><Fragment set:html={ic('img')} /><span><strong>Wybierz</strong>, upuść albo wklej <kbd>⌘V</kbd></span><small>Na innej stronie: prawy klik na zdjęciu → „Kopiuj obraz”</small><input id="cover-in" type="file" accept="image/*" /></label>
+                    <div class="cacts">
+                      <button type="button" class="btn ghost" id="c-ai"><Fragment set:html={ic('spark')} /> Nowa ilustracja AI</button>
+                      <button type="button" class="btn ghost" id="c-find"><Fragment set:html={ic('search')} /> Zdjęcie osoby</button>
+                    </div>
+                    <div class="cbox" id="c-ai-box" hidden>
+                      <label>Co ma przedstawiać<textarea id="c-prompt" rows="3" placeholder="np. tram on a city street in autumn"></textarea></label>
+                      <div id="c-ai-prev" class="cover"></div>
+                      <div class="cbtns"><button type="button" class="btn ghost" id="c-ai-go">Generuj</button><button type="button" class="btn red" id="c-ai-use" hidden>Użyj tej</button></div>
+                      <small class="hint">Grafikę tworzy automat (darmowy generator) – podgląd pojawi się tu po 2–6 minutach. Opis po angielsku działa najlepiej.</small>
+                    </div>
+                    <div class="cbox" id="c-find-box" hidden>
+                      <label>Imię i nazwisko<input id="c-person" placeholder="np. Tomasz Kaczmarek" /></label>
+                      <div class="cbtns"><button type="button" class="btn ghost" id="c-find-go">Szukaj w Wikipedii</button><a class="btn ghost" id="c-google" target="_blank" rel="noopener"><Fragment set:html={ic('ext')} /> Google Grafika</a></div>
+                      <div id="c-res" class="thumbs pick"></div>
+                      <small class="hint" id="c-res-n">Zdjęcia z Wikipedii mają wolną licencję – podpis uzupełni się sam. Z Google: „Kopiuj obraz”, wróć tu i naciśnij ⌘V, potem wpisz autora zdjęć.</small>
+                    </div>
                     <label>Opis zdjęcia (alt)<input name="coverAlt" placeholder="Co widać na zdjęciu" /></label>
                     <label>Autor zdjęć<input name="photoCredit" placeholder="np. Jan Kowalski" /></label>
                   </div>
@@ -503,6 +520,17 @@ const ic = (k: keyof typeof I) => `<svg viewBox="0 0 24 24" width="20" height="2
   .thumbs button:hover { background: var(--red); }
   .cover { aspect-ratio: 16 / 9; border-radius: 14px; overflow: hidden; background: #eef0f4; }
   .cover:empty { display: none; }
+  .cover.wait { display: grid; place-items: center; color: var(--ink-soft); font-size: 14px; }
+  .drop kbd { font: inherit; font-weight: 700; color: var(--ink); background: #eef0f4; border-radius: 6px; padding: 1px 6px; }
+  .cacts, .cbtns { display: flex; flex-wrap: wrap; gap: 8px; }
+  .cacts .btn, .cbtns .btn { flex: 1 1 auto; justify-content: center; min-height: 38px; font-size: 14px; }
+  .cacts .btn[disabled] { opacity: 0.45; cursor: not-allowed; }
+  .cbox { display: grid; gap: 10px; padding: 14px; border-radius: 14px; background: #f7f8fb; }
+  .cnote { padding: 10px 12px; border-radius: 12px; background: #fff4d6; color: #6b4a00; font-size: 13.5px; font-weight: 600; }
+  .cnote.need { background: #fde4e5; color: #8f0e15; }
+  .thumbs.pick button { position: static; width: 100%; height: 100%; padding: 0; border-radius: 0; background: none; }
+  .thumbs.pick button:hover { background: none; outline: 3px solid var(--red); outline-offset: -3px; }
+  .thumbs.pick img { display: block; }
   .drop { position: relative; display: grid !important; justify-items: center; text-align: center; gap: 6px !important; padding: 26px 18px; border: 2px dashed #d5d8e1; border-radius: 16px; background: #fafbfc; cursor: pointer; color: var(--ink-soft) !important; font-weight: 500 !important; transition: border-color 0.2s, background-color 0.2s; }
   .drop.small { padding: 16px; }
   .drop strong { color: var(--ink); }
