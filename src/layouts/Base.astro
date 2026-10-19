@@ -138,7 +138,15 @@ const adsense = settings.adsenseEnabled && settings.adsenseClient ? settings.ads
         var loaded = false;
         function late() {
           if (loaded) return; loaded = true;
-          if (adsense) document.querySelectorAll('.adsbygoogle').forEach(function () { (window.adsbygoogle = window.adsbygoogle || []).push({}); });
+          // tylko widoczne miejsca (ukryta kolumna boczna ma szerokość 0, a błąd Google przerywałby kolejne reklamy)
+          if (adsense) {
+            var ins = [].slice.call(document.querySelectorAll('ins.adsbygoogle:not([data-adsbygoogle-status])'));
+            ins.forEach(function (el) { if (!el.offsetWidth) el.classList.remove('adsbygoogle'); });
+            ins.forEach(function (el) {
+              if (!el.classList.contains('adsbygoogle')) return;
+              try { (window.adsbygoogle = window.adsbygoogle || []).push({}); } catch (e) {}
+            });
+          }
           if (ga) {
             var g = document.createElement('script'); g.async = true;
             g.src = 'https://www.googletagmanager.com/gtag/js?id=' + ga; document.head.appendChild(g);
