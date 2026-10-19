@@ -378,7 +378,92 @@ $('#e-approve').addEventListener('click', () => {
 function renderCover() {
   const c = current.cover;
   $('#cover').innerHTML = c ? `<img src="${esc(src(c.srcset[Math.min(1, c.srcset.length - 1)].url))}" alt="">` : '';
+  $('#c-crop').hidden = !c;
 }
+
+// ---------------- kadrowanie zdjęcia głównego ----------------
+// Strona pokazuje zdjęcie główne w proporcji 16:9 – redakcja sama ustawia kadr (przeciąganie + powiększenie).
+// Stan trzymamy w pikselach oryginału: środek kadru (cx, cy) i powiększenie z (1 = największy możliwy kadr).
+const CROP_MAX_W = 1600;
+function cropBox(file: Blob): Promise<Blob | null> {
+  return new Promise(async (resolve) => {
+    let bmp: ImageBitmap;
+    try { bmp = await createImageBitmap(file); } catch { toast('Nie udało się odczytać zdjęcia.', true); return resolve(null); }
+    const dlg = $('#crop') as HTMLDialogElement;
+    const stage = $('#crop-stage');
+    const img = $('#crop-img') as HTMLImageElement;
+    const zoom = $('#crop-zoom') as HTMLInputElement;
+    const bw = bmp.width, bh = bmp.height;
+    const full = Math.min(bw, (bh * 16) / 9); // szerokość kadru przy z = 1
+    let z = 1, cx = 0, cy = 0;
+    const size = () => { const cw = full / z; return [cw, (cw * 9) / 16]; };
+    const reset = () => { z = 1; const [, ch] = size(); cx = bw / 2; cy = ch / 2 + (bh - ch) * 0.2; draw(); };
+    const draw = () => {
+      const [cw, ch] = size();
+      cx = Math.min(Math.max(cx, cw / 2), bw - cw / 2);
+      cy = Math.min(Math.max(cy, ch / 2), bh - ch / 2);
+      const k = stage.clientWidth / cw;
+      img.style.width = `${bw}px`;
+      img.style.transform = `translate(${-(cx - cw / 2) * k}px, ${-(cy - ch / 2) * k}px) scale(${k})`;
+      zoom.value = String(z);
+    };
+    const setZoom = (v: number) => { z = Math.min(4, Math.max(1, v)); draw(); };
+    let drag: { x: number; y: number } | null = null;
+    const down = (e: PointerEvent) => { drag = { x: e.clientX, y: e.clientY }; stage.setPointerCapture(e.pointerId); stage.classList.add('drag'); };
+    const move = (e: PointerEvent) => {
+      if (!drag) return;
+      const k = stage.clientWidth / size()[0];
+      cx -= (e.clientX - drag.x) / k;
+      cy -= (e.clientY - drag.y) / k;
+      drag = { x: e.clientX, y: e.clientY };
+      draw();
+    };
+    const up = () => { drag = null; stage.classList.remove('drag'); };
+    const wheel = (e: WheelEvent) => { e.preventDefault(); setZoom(z * Math.exp(-e.deltaY * 0.0015)); };
+    const onZoom = () => setZoom(+zoom.value);
+    const url = URL.createObjectURL(file);
+    const finish = async (ok: boolean) => {
+      stage.removeEventListener('pointerdown', down);
+      stage.removeEventListener('pointermove', move);
+      stage.removeEventListener('pointerup', up);
+      stage.removeEventListener('pointercancel', up);
+      stage.removeEventListener('wheel', wheel);
+      zoom.removeEventListener('input', onZoom);
+      dlg.removeEventListener('cancel', cancel);
+      window.removeEventListener('resize', draw);
+      $('#crop-yes').onclick = $('#crop-no').onclick = $('#crop-reset').onclick = null;
+      if (dlg.open) dlg.close();
+      URL.revokeObjectURL(url);
+      if (!ok) return resolve(null);
+      const [cw, ch] = size();
+      const w = Math.round(Math.min(CROP_MAX_W, cw));
+      const h = Math.round((w * 9) / 16);
+      const c = document.createElement('canvas');
+      c.width = w; c.height = h;
+      const ctx = c.getContext('2d')!;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(bmp, cx - cw / 2, cy - ch / 2, cw, ch, 0, 0, w, h);
+      c.toBlob((b) => resolve(b), 'image/jpeg', 0.92);
+    };
+    const cancel = (e: Event) => { e.preventDefault(); finish(false); };
+    stage.addEventListener('pointerdown', down);
+    stage.addEventListener('pointermove', move);
+    stage.addEventListener('pointerup', up);
+    stage.addEventListener('pointercancel', up);
+    stage.addEventListener('wheel', wheel, { passive: false });
+    zoom.addEventListener('input', onZoom);
+    dlg.addEventListener('cancel', cancel);
+    window.addEventListener('resize', draw);
+    $('#crop-yes').onclick = () => finish(true);
+    $('#crop-no').onclick = () => finish(false);
+    $('#crop-reset').onclick = reset;
+    img.onload = reset;
+    img.src = url;
+    dlg.showModal();
+  });
+}
+// oryginał ostatnio wgranego zdjęcia – ponowne kadrowanie bez utraty jakości
+let coverOriginal: { url: string; blob: Blob } | null = null;
 function renderGallery() {
   $('#gal').innerHTML = current.gallery.map((g, i) => `<figure><img src="${esc(src(g.srcset[0].url))}" alt=""><button type="button" data-rm="${i}" aria-label="Usuń zdjęcie">×</button></figure>`).join('');
   $('#gal-n').textContent = current.gallery.length ? `${current.gallery.length} zdj.` : '';
@@ -388,9 +473,12 @@ const slugBase = () => `u/${F('slug').value || 'nowy'}`;
 const AI_CREDIT = 'Ilustracja wygenerowana przez AI';
 /** Nowe zdjęcie główne z pliku, schowka, generatora AI albo Wikipedii; credit === undefined → podpis wpisuje redakcja */
 async function setCover(file: Blob, source: string, credit?: string) {
+  const cropped = await cropBox(file);
+  if (!cropped) return;
   busy('#cover-in', true);
   try {
-    current.cover = await uploadPhoto(file, slugBase(), F('coverAlt').value || F('title').value, COVER_W);
+    current.cover = await uploadPhoto(cropped, slugBase(), F('coverAlt').value || F('title').value, COVER_W);
+    coverOriginal = { url: current.cover.srcset[0].url, blob: file };
     current.imageSource = source;
     if (credit !== undefined) F('photoCredit').value = credit;
     else if (F('photoCredit').value === AI_CREDIT || current.data.photoCredit === F('photoCredit').value) F('photoCredit').value = '';
@@ -401,6 +489,30 @@ async function setCover(file: Blob, source: string, credit?: string) {
   } catch (err: any) { toast(err.message, true); }
   busy('#cover-in', false);
 }
+// ponowne kadrowanie obecnego zdjęcia (z oryginału, jeśli wgrano je w tej sesji; inaczej z największej wersji)
+$('#c-crop').addEventListener('click', async () => {
+  const c = current.cover;
+  if (!c) return;
+  let file = coverOriginal?.url === c.srcset[0].url ? coverOriginal.blob : null;
+  try {
+    if (!file) {
+      const big = [...c.srcset].sort((a, b) => b.w - a.w)[0].url;
+      const res = await fetch(src(big));
+      if (!res.ok) throw new Error();
+      file = await res.blob();
+    }
+  } catch { return toast('Nie udało się wczytać zdjęcia do kadrowania.', true); }
+  const cropped = await cropBox(file);
+  if (!cropped) return;
+  busy('#cover-in', true);
+  try {
+    current.cover = await uploadPhoto(cropped, slugBase(), F('coverAlt').value || F('title').value, COVER_W);
+    coverOriginal = { url: current.cover.srcset[0].url, blob: file };
+    renderCover();
+    toast('Kadr zmieniony – zapisz artykuł.');
+  } catch (err: any) { toast(err.message, true); }
+  busy('#cover-in', false);
+});
 $('#cover-in').addEventListener('change', async (e) => {
   const file = (e.target as HTMLInputElement).files?.[0];
   if (file) await setCover(file, 'wlasne');
@@ -442,13 +554,16 @@ function resetCoverTools(d: any) {
   ($('#c-prompt') as HTMLTextAreaElement).value = d.ai?.illustrationPrompt || '';
   $('#c-ai-box').hidden = !d.coverPending && !d.coverCandidate;
   renderAiCandidate();
-  $('#c-find-box').hidden = !person;
+  const missing = !!d.needsPhoto || (d.origin === 'redaktor' && !d.cover);
+  $('#c-find-box').hidden = !person && !missing;
   $('#c-res').innerHTML = '';
   const note = $('#c-note');
-  note.hidden = !person;
-  note.classList.toggle('need', !!d.needsPhoto);
-  note.textContent = d.needsPhoto
-    ? `Artykuł o osobie (${person}) – redaktor nie znalazł jej zdjęcia. Wklej prawdziwe zdjęcie (⌘V) albo wyszukaj poniżej.`
+  note.hidden = !person && !missing;
+  note.classList.toggle('need', missing);
+  note.textContent = missing
+    ? person
+      ? `Artykuł o osobie (${person}) – redaktor nie znalazł jej zdjęcia. Wklej prawdziwe zdjęcie (⌘V) albo wyszukaj poniżej.`
+      : 'Redaktor nie znalazł pasującego zdjęcia. Wgraj lub wklej zdjęcie (⌘V), wyszukaj je poniżej albo zamów ilustrację AI.'
     : person ? `Artykuł o osobie (${person}) – na miniaturze musi być jej prawdziwe zdjęcie, nie ilustracja AI.` : '';
   syncCoverTools();
 }
@@ -641,7 +756,7 @@ form.addEventListener('submit', async (e) => {
     cover: current.cover,
     imageSource: current.imageSource,
     ...(current.data.coverCandidate && current.cover?.srcset?.[0]?.url === current.data.coverCandidate.image?.srcset?.[0]?.url ? { coverCandidate: null } : {}),
-    needsPhoto: !!current.data.needsPhoto && current.imageSource === 'plansza',
+    needsPhoto: !current.cover && (!!current.data.needsPhoto || current.data.origin === 'redaktor'),
     gallery: current.gallery,
     keywords: keywordsFor(title, lead),
     updatedAt: serverTimestamp(),
@@ -791,7 +906,7 @@ $('#ad-del').addEventListener('click', async () => {
 });
 
 // ---------------- redaktor AI ----------------
-const IMG_SRC: Record<string, string> = { bank: 'bank zdjęć redakcji', wikimedia: 'Wikimedia Commons', ai: 'ilustracja AI', plansza: 'plansza z tytułem', zrodlo: 'zdjęcie z artykułu źródłowego', wlasne: 'wgrane przez redakcję' };
+const IMG_SRC: Record<string, string> = { bank: 'bank zdjęć redakcji', wikimedia: 'Wikimedia Commons', wikipedia: 'Wikipedia', openverse: 'Openverse (Creative Commons)', ai: 'ilustracja AI', plansza: 'plansza z tytułem', zrodlo: 'zdjęcie z artykułu źródłowego', wlasne: 'wgrane przez redakcję' };
 async function redCount() {
   const snap = await getDocs(query(collection(db, 'articles'), where('origin', '==', 'redaktor'), where('status', '==', 'draft')));
   $('#red-n').textContent = String(snap.size);
@@ -813,7 +928,7 @@ async function loadRedaktor() {
     return `<div class="rcard" data-rid="${esc(id)}">
       <span class="rcard-img" style="${img ? `background-image:url('${esc(src(img))}')` : ''}"></span>
       <div class="rcard-b">
-        <span class="rcard-m">${tagHtml(d.category)}<span>${fmt(toDate(d.publishedAt))}</span><span>· na podstawie <a href="${esc(d.basedOn?.url)}" target="_blank" rel="noopener">${esc(d.basedOn?.name)}</a></span><span>· zdjęcie: ${esc(IMG_SRC[d.imageSource] || '—')}</span>${d.needsPhoto ? `<span class="pill off" title="Artykuł o osobie – wklej jej prawdziwe zdjęcie">brak zdjęcia osoby</span>` : ''}${d.copyRisk ? `<span class="pill off" title="Tyle zwrotów pokrywa się ze źródłem – przeredaguj przed publikacją">podobny do źródła ${d.copyRisk}%</span>` : ''}</span>
+        <span class="rcard-m">${tagHtml(d.category)}<span>${fmt(toDate(d.publishedAt))}</span><span>· na podstawie <a href="${esc(d.basedOn?.url)}" target="_blank" rel="noopener">${esc(d.basedOn?.name)}</a></span><span>· zdjęcie: ${esc(IMG_SRC[d.imageSource] || '—')}</span>${!d.cover ? `<span class="pill off" title="Otwórz szkic i dodaj zdjęcie główne">${d.ai?.person?.name ? 'brak zdjęcia osoby' : 'brak zdjęcia'}</span>` : ''}${d.copyRisk ? `<span class="pill off" title="Tyle zwrotów pokrywa się ze źródłem – przeredaguj przed publikacją">podobny do źródła ${d.copyRisk}%</span>` : ''}</span>
         <span class="rcard-t">${esc(d.title)}</span>
         <span class="rcard-l">${esc(d.lead)}</span>
         <span class="rcard-a">
@@ -830,6 +945,8 @@ async function loadRedaktor() {
     if (act === 'open') return openEditor(id);
     try {
       if (act === 'pub') {
+        const d = list.find((x) => x.id === id)?.d;
+        if (!d?.cover && !(await confirmBox('Opublikować bez zdjęcia?', 'Ten szkic nie ma zdjęcia głównego – na stronie pojawi się szare tło z logo. Lepiej kliknij „Edytuj” i dodaj zdjęcie.', 'Opublikuj bez zdjęcia'))) return;
         await updateDoc(doc(db, 'articles', id), { status: 'published', publishedAt: Timestamp.now(), updatedAt: serverTimestamp() });
         toast('Opublikowano – pojawi się na stronie w ciągu ok. 30 minut.');
       } else {
