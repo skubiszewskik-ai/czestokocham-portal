@@ -71,7 +71,7 @@ jobs:
           git config user.email "actions@users.noreply.github.com"
           git add public/media data
           git diff --cached --quiet || git commit -m "Publikacja $(date -u +%F\ %H:%M) UTC"
-          git pull --rebase
+          git pull --rebase -X theirs # przy zderzeniu z inną publikacją wygrywa nasza, nowsza kopia danych
           git push
       - if: always()
         run: rm -f "$RUNNER_TEMP/sa.json"
