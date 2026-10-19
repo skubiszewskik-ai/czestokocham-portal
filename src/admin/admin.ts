@@ -89,6 +89,7 @@ onAuthStateChanged(auth, async (u: User | null) => {
     $('#v-login').hidden = true;
     $('#app').hidden = false;
     show('dashboard');
+    catchUp().catch(() => {});
   } catch {
     $('#app').hidden = true;
     $('#v-login').hidden = false;
@@ -126,6 +127,18 @@ function kickPublish() {
       toast(`Nie udało się uruchomić publikacji od razu (${err.message}) – zrobi to automat według harmonogramu.`, true);
     }
   }, 3000);
+}
+// Harmonogram GitHuba potrafi pominąć większość uruchomień – po wejściu do panelu nadrabiamy zaległy import (po 15:00)
+// i wirtualnego redaktora (co 2 godziny, 7–21), tak samo jak scripts/check.mjs
+async function catchUp() {
+  const b = (await getDoc(doc(db, 'config', 'build'))).data() || {};
+  if (b.importRequested || b.redaktorRequested) return;
+  const p = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Warsaw', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hourCycle: 'h23' })
+    .formatToParts(new Date()).map((x) => [x.type, x.value]));
+  const day = `${p.year}-${p.month}-${p.day}`;
+  const hour = Number(p.hour);
+  if (hour >= 15 && b.lastImportDay !== day) return markDirty({ importRequested: true });
+  if (hour >= 7 && hour <= 21 && Date.now() - (toDate(b.lastRedaktorAt)?.getTime() || 0) >= 2.5 * 3600e3) return markDirty({ redaktorRequested: true });
 }
 async function buildStatus() {
   const b = (await getDoc(doc(db, 'config', 'build'))).data() || {};
