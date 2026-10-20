@@ -1,0 +1,17 @@
+# tymczasowy test wyboru zdjęć stockowych przez Gemini (do usunięcia)
+name: Test zdjęć
+on: workflow_dispatch
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: mkdir -p out && node scripts/test-zdjecia.mjs "$PWD/out"
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      - uses: actions/upload-artifact@v4
+        with: { name: zdjecia, path: out }
