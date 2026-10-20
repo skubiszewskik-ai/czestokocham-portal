@@ -4,7 +4,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { execSync } from 'node:child_process';
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
-import { db, warsawNow } from '../lib/firestore.js';
+import { db, warsawNow, importSlot, IMPORT_HOURS } from '../lib/firestore.js';
 import { importLatest, importWczestochowie } from '../lib/importer.js';
 import { runRedaktor } from '../lib/redaktor.js';
 import { aiCandidate } from '../lib/images.js';
@@ -218,7 +218,13 @@ if (process.env.GITHUB_ACTIONS) {
   await finish(cleanup);
 }
 const update = { dirty: false, importRequested: false, lastBuild: startedAt };
-if (importResult) update.lastImportDay = warsawNow().day;
+if (importResult) {
+  // pora liczona od startu – import zaczęty 11:58 nie może zaliczyć importu o 12:00
+  const slot = importSlot(warsawNow(startedAt.toDate()));
+  if (slot) update.lastImportSlot = slot;
+  // lastImportDay = odbył się ostatni import dnia (starsze wersje budzika patrzą tylko na to pole)
+  if (slot?.endsWith(` ${IMPORT_HOURS.at(-1)}`)) update.lastImportDay = warsawNow(startedAt.toDate()).day;
+}
 if (redaktorResult) Object.assign(update, { redaktorRequested: false, lastRedaktorAt: startedAt });
 // nie kasujemy flagi, jeśli ktoś zapisał coś w trakcie publikacji
 const latest = (await buildRef.get()).data() || {};

@@ -1,6 +1,6 @@
 // Budzik automatu Częstokocham – Google Apps Script (darmowy, działa na serwerach Google, konto skubiszewskik@gmail.com).
 // Harmonogram GitHuba potrafi pominąć większość uruchomień, więc co 15 minut budzik sam sprawdza w Firestore
-// to samo co scripts/check.mjs (zmiany z panelu, import po 15:00, redaktor co 2 godziny 7–21) i tylko wtedy
+// to samo co scripts/check.mjs (zmiany z panelu, import o 10, 12 i 15, redaktor co 2 godziny 7–21) i tylko wtedy
 // uruchamia automat na GitHubie – nie zużywa minut GitHub Actions, gdy nic nie czeka.
 // Token GitHuba bierze z bazy (config/github – ten sam, który zapisuje panel w Ustawieniach).
 //
@@ -9,7 +9,7 @@
 
 const REPO = 'skubiszewskik-ai/czestokocham-portal';
 const DOCS = 'https://firestore.googleapis.com/v1/projects/czestokocham/databases/(default)/documents';
-const IMPORT_HOUR = 15;
+const IMPORT_HOURS = [10, 12, 15]; // jak lib/firestore.js
 
 function firestoreDoc(path) {
   const res = UrlFetchApp.fetch(`${DOCS}/${path}`, { headers: { authorization: `Bearer ${ScriptApp.getOAuthToken()}` }, muteHttpExceptions: true });
@@ -25,7 +25,9 @@ function whatToDo() {
   const b = firestoreDoc('config/build');
   const day = Utilities.formatDate(new Date(), 'Europe/Warsaw', 'yyyy-MM-dd');
   const hour = Number(Utilities.formatDate(new Date(), 'Europe/Warsaw', 'H'));
-  const importDue = (hour >= IMPORT_HOUR && (b.lastImportDay || {}).stringValue !== day) || bool(b.importRequested);
+  const h = IMPORT_HOURS.filter((x) => x <= hour).pop();
+  const slot = h === undefined ? null : `${day} ${h}`;
+  const importDue = (!!slot && (b.lastImportSlot || {}).stringValue !== slot) || bool(b.importRequested);
   const redaktorDue = bool(b.redaktorRequested) || (hour >= 7 && hour <= 21 && Date.now() - millis(b.lastRedaktorAt) >= 2 * 3600e3);
   return importDue ? 'import' : redaktorDue ? 'redaktor' : bool(b.dirty) ? 'build' : 'none';
 }

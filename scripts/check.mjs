@@ -1,12 +1,13 @@
-// Szybkie sprawdzenie (GitHub Actions co 30 min): czy trzeba publikować i czy pora na import (czestochowa.pl, wczestochowie.pl)
+// Szybkie sprawdzenie (GitHub Actions co 30 min): czy trzeba publikować i czy pora na import o 10, 12 lub 15 (czestochowa.pl, wczestochowie.pl)
 // albo na wirtualnego redaktora
 import { appendFileSync } from 'node:fs';
-import { db, warsawNow, IMPORT_HOUR } from '../lib/firestore.js';
+import { db, warsawNow, importSlot } from '../lib/firestore.js';
 
 const snap = await db().collection('config').doc('build').get();
 const b = snap.data() || {};
 const now = warsawNow();
-const importDue = (now.hour >= IMPORT_HOUR && b.lastImportDay !== now.day) || !!b.importRequested;
+const slot = importSlot(now);
+const importDue = (!!slot && b.lastImportSlot !== slot) || !!b.importRequested;
 // wirtualny redaktor co 2 godziny w ciągu dnia (7–21) albo na żądanie z panelu
 const redaktorDue = !!b.redaktorRequested || (now.hour >= 7 && now.hour <= 21 && Date.now() - (b.lastRedaktorAt?.toMillis() || 0) >= 2 * 3600e3);
 const run = importDue ? 'import' : redaktorDue ? 'redaktor' : b.dirty || !snap.exists ? 'build' : 'none';

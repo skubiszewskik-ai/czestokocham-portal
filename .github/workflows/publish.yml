@@ -1,4 +1,4 @@
-# Automat Częstokocham (darmowy): co 30 minut sprawdza panel, a po 15:00 (czas polski) pobiera aktualności
+# Automat Częstokocham (darmowy): co 30 minut sprawdza panel, o 10, 12 i 15 (czas polski) pobiera aktualności
 # z czestochowa.pl i wczestochowie.pl, po każdej zmianie kodu publikuje od razu, co 2 godziny (7–21) uruchamia wirtualnego redaktora (szkice do akceptu) i odświeża kalendarz wydarzeń z cgk.czestochowa.pl, buduje stronę i wdraża ją na Firebase Hosting (plan Spark).
 name: Publikacja
 

@@ -60,7 +60,7 @@ const ic = (k: keyof typeof I) => `<svg viewBox="0 0 24 24" width="20" height="2
         <ul>
           <li>Artykuły z edytorem i galerią zdjęć</li>
           <li>Banery reklamowe z kontrolą wymiarów</li>
-          <li>Automatyczny import z czestochowa.pl i wczestochowie.pl o 15:00</li>
+          <li>Automatyczny import z czestochowa.pl i wczestochowie.pl o 10:00, 12:00 i 15:00</li>
           <li>Wirtualny redaktor – szkice z lokalnych portali do akceptu</li>
         </ul>
       </div>
@@ -305,7 +305,7 @@ const ic = (k: keyof typeof I) => `<svg viewBox="0 0 24 24" width="20" height="2
               <span class="qa-i green big"><Fragment set:html={ic('sync')} /></span>
               <div class="grow">
                 <h2>Import z czestochowa.pl i wczestochowie.pl</h2>
-                <p>Codziennie po 15:00 automat pobiera nowe aktualności z <a href="https://www.czestochowa.pl/aktualnosci" target="_blank" rel="noopener">czestochowa.pl/aktualnosci</a> oraz z <a href="https://wczestochowie.pl/" target="_blank" rel="noopener">wczestochowie.pl</a> razem ze zdjęciami (WebP) i publikuje je z dopiskiem „Źródło: …” i odnośnikiem do oryginału. Artykuły sponsorowane z wczestochowie.pl są pomijane. Zaimportowane artykuły możesz edytować – kolejny import ich nie nadpisze.</p>
+                <p>Codziennie o 10:00, 12:00 i 15:00 automat pobiera nowe aktualności z <a href="https://www.czestochowa.pl/aktualnosci" target="_blank" rel="noopener">czestochowa.pl/aktualnosci</a> oraz z <a href="https://wczestochowie.pl/" target="_blank" rel="noopener">wczestochowie.pl</a> razem ze zdjęciami (WebP) i publikuje je z dopiskiem „Źródło: …” i odnośnikiem do oryginału. Artykuły sponsorowane z wczestochowie.pl są pomijane. Zaimportowane artykuły możesz edytować – kolejny import ich nie nadpisze.</p>
                 <p>Przy każdym imporcie i przy każdym uruchomieniu wirtualnego redaktora (co ~2 godziny) automat odświeża też <a href="/wydarzenia" target="_blank">kalendarz wydarzeń</a> z <a href="https://cgk.czestochowa.pl/" target="_blank" rel="noopener">cgk.czestochowa.pl</a>: kopiuje zdjęcia z podpisem źródła, opisy redaguje AI, a zakończone wydarzenia same znikają.</p>
               </div>
               <button id="imp-run" class="btn red"><Fragment set:html={ic('bolt')} /> Importuj teraz</button>

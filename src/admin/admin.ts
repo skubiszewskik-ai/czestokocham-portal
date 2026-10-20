@@ -129,7 +129,7 @@ function kickPublish() {
     }
   }, 3000);
 }
-// Harmonogram GitHuba potrafi pominąć większość uruchomień – po wejściu do panelu nadrabiamy zaległy import (po 15:00)
+// Harmonogram GitHuba potrafi pominąć większość uruchomień – po wejściu do panelu nadrabiamy zaległy import (o 10, 12 i 15)
 // i wirtualnego redaktora (co 2 godziny, 7–21), tak samo jak scripts/check.mjs
 async function catchUp() {
   const b = (await getDoc(doc(db, 'config', 'build'))).data() || {};
@@ -138,7 +138,8 @@ async function catchUp() {
     .formatToParts(new Date()).map((x) => [x.type, x.value]));
   const day = `${p.year}-${p.month}-${p.day}`;
   const hour = Number(p.hour);
-  if (hour >= 15 && b.lastImportDay !== day) return markDirty({ importRequested: true });
+  const h = [10, 12, 15].filter((x) => x <= hour).pop(); // jak IMPORT_HOURS w lib/firestore.js
+  if (h !== undefined && b.lastImportSlot !== `${day} ${h}`) return markDirty({ importRequested: true });
   if (hour >= 7 && hour <= 21 && Date.now() - (toDate(b.lastRedaktorAt)?.getTime() || 0) >= 2.5 * 3600e3) return markDirty({ redaktorRequested: true });
 }
 async function buildStatus() {
@@ -1442,7 +1443,7 @@ async function loadImports() {
   $('#imp-list').innerHTML = snap.docs.map((d) => {
     const x = d.data();
     const err = (x.errors || []).length;
-    return `<tr><td>${fmt(toDate(x.at))}</td><td>${x.trigger === 'manual' ? 'Ręcznie' : 'Automatycznie (15:00)'}</td><td>${x.checked ?? 0}</td><td><strong>${(x.imported || []).length}</strong></td><td>${err ? `<span class="pill off" title="${esc((x.errors || []).join('; '))}">${err}</span>` : '—'}</td></tr>`;
+    return `<tr><td>${fmt(toDate(x.at))}</td><td>${x.trigger === 'manual' ? 'Ręcznie' : 'Automatycznie'}</td><td>${x.checked ?? 0}</td><td><strong>${(x.imported || []).length}</strong></td><td>${err ? `<span class="pill off" title="${esc((x.errors || []).join('; '))}">${err}</span>` : '—'}</td></tr>`;
   }).join('') || '<tr><td colspan="5">Jeszcze nie było importu.</td></tr>';
 }
 async function runImport() {
