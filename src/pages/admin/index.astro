@@ -264,9 +264,9 @@ const ic = (k: keyof typeof I) => `<svg viewBox="0 0 24 24" width="20" height="2
                     </div>
                     <div class="cbox" id="c-find-box" hidden>
                       <label>Czego szukasz<input id="c-person" type="search" enterkeyhint="search" placeholder="np. komenda policji Myszków, Tomasz Kaczmarek" /></label>
-                      <div class="cbtns"><a class="btn red" id="c-google" target="_blank" rel="noopener"><Fragment set:html={ic('ext')} /> Szukaj w Google Grafika</a><button type="button" class="btn ghost" id="c-city-go">Zdjęcia miasta</button><button type="button" class="btn ghost" id="c-find-go">Wikipedia</button></div>
+                      <div class="cbtns"><a class="btn red" id="c-google" target="_blank" rel="noopener"><Fragment set:html={ic('ext')} /> Szukaj w Google Grafika</a><button type="button" class="btn ghost" id="c-stock-go">Banki zdjęć</button><button type="button" class="btn ghost" id="c-city-go">Zdjęcia miasta</button><button type="button" class="btn ghost" id="c-find-go">Wikipedia</button></div>
                       <div id="c-res" class="thumbs pick"></div>
-                      <small class="hint" id="c-res-n">„Zdjęcia miasta” szuka w zdjęciach Urzędu Miasta z zaimportowanych aktualności czestochowa.pl (np. Politechnika, Aleje, Raków). W Google: prawy klik na zdjęciu → „Kopiuj obraz”, wróć tu i naciśnij ⌘V, potem wpisz autora zdjęć. Przy zdjęciach miasta i z Wikipedii podpis uzupełni się sam.</small>
+                      <small class="hint" id="c-res-n">„Banki zdjęć” szuka darmowych zdjęć stockowych (StockSnap, WordPress Photo Directory – licencja CC0), hasło możesz wpisać po polsku. „Zdjęcia miasta” szuka w zdjęciach Urzędu Miasta z zaimportowanych aktualności czestochowa.pl (np. Politechnika, Aleje, Raków). W Google: prawy klik na zdjęciu → „Kopiuj obraz”, wróć tu i naciśnij ⌘V, potem wpisz autora zdjęć. Przy zdjęciach miasta i z Wikipedii podpis uzupełni się sam.</small>
                     </div>
                     <label>Opis zdjęcia (alt)<input name="coverAlt" placeholder="Co widać na zdjęciu" /></label>
                     <label>Autor zdjęć<input name="photoCredit" placeholder="np. Jan Kowalski" /></label>

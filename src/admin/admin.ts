@@ -766,6 +766,53 @@ $('#c-city-go').addEventListener('click', async () => {
   }));
   btn.disabled = false; btn.textContent = 'Zdjęcia miasta';
 });
+// Banki zdjęć CC0 (StockSnap, WordPress Photo Directory, Nappy) przez Openverse – bez klucza, API i pliki pozwalają na zapytania
+// z przeglądarki. Banki są po angielsku, więc polskie hasło tłumaczy darmowy MyMemory (bez klucza).
+const OV = 'https://api.openverse.org/v1/images/';
+const STOCK_SRC: Record<string, string> = { stocksnap: 'StockSnap', wordpress: 'WordPress Photo Directory', nappy: 'Nappy' };
+let stockHits: { id: string; thumb: string; url: string; credit: string }[] = [];
+async function toEnglish(q: string) {
+  try {
+    const r = await (await fetch(`https://api.mymemory.translated.net/get?langpair=pl|en&q=${encodeURIComponent(q)}`)).json();
+    const t = String(r.responseData?.translatedText || '').trim();
+    return r.responseStatus === 200 && t ? t.toLowerCase() : q;
+  } catch { return q; }
+}
+$('#c-stock-go').addEventListener('click', async () => {
+  const typed = personName();
+  const q0 = typed || current.data.ai?.stockQueries?.[0] || F('title').value.trim();
+  if (!q0) return toast('Wpisz, czego szukasz, np. siatkówka, przystanek autobusowy.', true);
+  const btn = $('#c-stock-go') as HTMLButtonElement;
+  btn.disabled = true; btn.textContent = 'Szukam…';
+  stockHits = [];
+  const q = await toEnglish(q0);
+  try {
+    const u = new URL(OV);
+    Object.entries({ q, source: Object.keys(STOCK_SRC).join(','), license: 'cc0,pdm', page_size: '24', mature: 'false' }).forEach(([k, v]) => u.searchParams.set(k, v));
+    const res = await (await fetch(u)).json();
+    stockHits = (res.results || []).filter((r: any) => !r.width || r.width >= 1000).map((r: any) => {
+      const who = String(r.creator || '').replace(/\s+/g, ' ').trim().slice(0, 60);
+      return { id: r.id, thumb: `${OV}${r.id}/thumb/`, url: r.url, credit: `${who ? `${who} / ` : ''}${STOCK_SRC[r.source] || r.source}, CC0` };
+    });
+  } catch { toast('Banki zdjęć nie odpowiadają – spróbuj za chwilę.', true); }
+  $('#c-res').innerHTML = stockHits.map((r, i) => `<figure><button type="button" data-stock="${i}" title="${esc(r.credit)}"><img src="${esc(r.thumb)}" alt="" loading="lazy"></button></figure>`).join('');
+  $('#c-res-n').textContent = stockHits.length
+    ? `Wyniki dla „${q}”. Kliknij zdjęcie, aby ustawić je jako główne – potem wykadrujesz. Podpis uzupełni się sam. Uważaj na zdjęcia, które wyglądają na inny kraj.`
+    : `Brak zdjęć dla „${q}”. Spróbuj krótszego, ogólniejszego hasła (np. „siatkówka”, „autobus”, „szpital”).`;
+  $$('#c-res [data-stock]').forEach((b) => b.addEventListener('click', async () => {
+    const r = stockHits[+b.dataset.stock!];
+    // najpierw oryginał; gdy serwer banku nie pozwala na pobranie z przeglądarki – pełna wersja przez Openverse
+    for (const url of [r.url, `${OV}${r.id}/thumb/?full_size=true&compressed=false`]) {
+      try {
+        const res = await fetch(url);
+        if (!res.ok || !/^image\//.test(res.headers.get('content-type') || '')) continue;
+        return await setCover(await res.blob(), 'stock', r.credit);
+      } catch {}
+    }
+    toast('Nie udało się pobrać zdjęcia.', true);
+  }));
+  btn.disabled = false; btn.textContent = 'Banki zdjęć';
+});
 $('#gal-in').addEventListener('change', async (e) => {
   const files = [...((e.target as HTMLInputElement).files || [])];
   busy('#gal-in', true);
