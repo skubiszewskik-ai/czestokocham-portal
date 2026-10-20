@@ -785,20 +785,26 @@ $('#c-stock-go').addEventListener('click', async () => {
   const btn = $('#c-stock-go') as HTMLButtonElement;
   btn.disabled = true; btn.textContent = 'Szukam…';
   stockHits = [];
-  const q = await toEnglish(q0);
+  let q = await toEnglish(q0);
   try {
-    const u = new URL(OV);
-    Object.entries({ q, source: Object.keys(STOCK_SRC).join(','), license: 'cc0,pdm', page_size: '24', mature: 'false' }).forEach(([k, v]) => u.searchParams.set(k, v));
-    const res = await (await fetch(u)).json();
-    stockHits = (res.results || []).filter((r: any) => !r.width || r.width >= 1000).map((r: any) => {
+    // banki są małe – gdy całe hasło nic nie daje („volleyball match”), próbujemy pojedynczych słów, od najdłuższego
+    const words = q.split(/\s+/).filter((w) => w.length > 3).sort((a, b) => b.length - a.length);
+    let found: any[] = [];
+    for (const tryQ of [q, ...(words.length > 1 ? words : [])]) {
+      const u = new URL(OV);
+      Object.entries({ q: tryQ, source: Object.keys(STOCK_SRC).join(','), license: 'cc0,pdm', page_size: '20', mature: 'false' }).forEach(([k, v]) => u.searchParams.set(k, v));
+      found = (await (await fetch(u)).json()).results || [];
+      if (found.length) { q = tryQ; break; }
+    }
+    stockHits = found.filter((r: any) => !r.width || r.width >= 1000).map((r: any) => {
       const who = String(r.creator || '').replace(/\s+/g, ' ').trim().slice(0, 60);
       return { id: r.id, thumb: `${OV}${r.id}/thumb/`, url: r.url, credit: `${who ? `${who} / ` : ''}${STOCK_SRC[r.source] || r.source}, CC0` };
     });
   } catch { toast('Banki zdjęć nie odpowiadają – spróbuj za chwilę.', true); }
   $('#c-res').innerHTML = stockHits.map((r, i) => `<figure><button type="button" data-stock="${i}" title="${esc(r.credit)}"><img src="${esc(r.thumb)}" alt="" loading="lazy"></button></figure>`).join('');
   $('#c-res-n').textContent = stockHits.length
-    ? `Wyniki dla „${q}”. Kliknij zdjęcie, aby ustawić je jako główne – potem wykadrujesz. Podpis uzupełni się sam. Uważaj na zdjęcia, które wyglądają na inny kraj.`
-    : `Brak zdjęć dla „${q}”. Spróbuj krótszego, ogólniejszego hasła (np. „siatkówka”, „autobus”, „szpital”).`;
+    ? `Wyniki dla „${q}”${q !== q0.toLowerCase() ? ` (tłumaczenie „${q0}” – jeśli chybione, wpisz dwa słowa, np. „mecz siatkówki”, albo hasło po angielsku)` : ''}. Kliknij zdjęcie, aby ustawić je jako główne – potem wykadrujesz. Podpis uzupełni się sam. Uważaj na zdjęcia, które wyglądają na inny kraj.`
+    : `Brak zdjęć dla „${q}”${q !== q0.toLowerCase() ? ` (tłumaczenie „${q0}”)` : ''}. Spróbuj krótszego, ogólniejszego hasła (np. „siatkówka”, „autobus”, „szpital”).`;
   $$('#c-res [data-stock]').forEach((b) => b.addEventListener('click', async () => {
     const r = stockHits[+b.dataset.stock!];
     // najpierw oryginał; gdy serwer banku nie pozwala na pobranie z przeglądarki – pełna wersja przez Openverse
