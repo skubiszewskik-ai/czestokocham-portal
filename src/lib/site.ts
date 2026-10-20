@@ -64,3 +64,6 @@ export function ago(d: Date, now = new Date()) {
 
 /** Rozmiar tytułu dobierany do długości, żeby mieścił się w dwóch liniach */
 export const titleSize = (t: string) => (t.length <= 34 ? 'xl' : t.length <= 56 ? 'l' : t.length <= 80 ? 'm' : 's');
+
+/** Kalendarz wydarzeń (CGK) – własny kolor, poza działami wiadomości */
+export const EVENTS = { name: 'Wydarzenia', title: 'Co, gdzie, kiedy', color: '#0f7c8c', lede: 'Koncerty, spektakle, wystawy i spotkania w Częstochowie – na dziś i na najbliższe tygodnie.' };

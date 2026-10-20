@@ -1,0 +1,159 @@
+---
+import Base from '../../layouts/Base.astro';
+import Pic from '../../components/Pic.astro';
+import AdSlot from '../../components/AdSlot.astro';
+import Icon from '../../components/Icon.astro';
+import EventCard from '../../components/EventCard.astro';
+import { settings as getSettings, ads as getAds } from '../../lib/db';
+import { EVENTS, SITE } from '../../lib/site';
+import { allEvents, next, today, dayLabel, whenText, untilText, isOngoing, type CityEvent } from '../../lib/events';
+
+export function getStaticPaths() {
+  return allEvents().filter((e) => e.ready).map((e) => ({ params: { slug: e.slug }, props: { e } }));
+}
+const { e } = Astro.props as { e: CityEvent };
+const settings = getSettings();
+const ads = getAds();
+const t = today();
+const dates = e.dates.filter((d) => d.day >= t);
+const long = isOngoing(e);
+const more = next(9).filter((o) => o.e.slug !== e.slug).slice(0, 4);
+const url = new URL(`/wydarzenia/${e.slug}`, Astro.site).toString();
+const cover = e.cover?.srcset?.[e.cover.srcset.length - 1]?.url;
+const iso = (d: { day: string; time: string | null }) => (d.time ? `${d.day}T${d.time}` : d.day);
+const where = e.address ? `${e.place}, ${e.address}` : e.place;
+const map = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${where}, Częstochowa`)}`;
+const share = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`;
+const jsonld = (long ? [dates[0]] : dates.slice(0, 10)).map((d) => ({
+  '@context': 'https://schema.org',
+  '@type': 'Event',
+  name: e.title,
+  description: e.lead,
+  startDate: iso(d),
+  endDate: long ? iso(e.dates[e.dates.length - 1]) : undefined,
+  eventStatus: 'https://schema.org/EventScheduled',
+  eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
+  location: { '@type': 'Place', name: e.place, address: { '@type': 'PostalAddress', streetAddress: e.address || undefined, addressLocality: 'Częstochowa', addressCountry: 'PL' } },
+  image: cover ? [new URL(cover, Astro.site).toString()] : undefined,
+  organizer: e.organizer ? { '@type': 'Organization', name: e.organizer } : undefined,
+  url,
+}));
+---
+<Base title={e.title} description={e.lead || EVENTS.lede} image={cover} settings={settings} active="wydarzenia" jsonld={jsonld}>
+  <article class="wrap art" style={`--c:${EVENTS.color}`}>
+    <div class="art-main">
+      <nav class="crumbs small" aria-label="Okruszki"><a href="/">Strona główna</a><span aria-hidden="true">/</span><a href="/wydarzenia">Wydarzenia</a></nav>
+      <header class="art-head">
+        <a class="tag" href="/wydarzenia">{e.type}</a>
+        <h1 class="art-t">{e.title}</h1>
+        {e.lead && <p class="lead art-lead">{e.lead}</p>}
+      </header>
+
+      <div class="facts">
+        <div class="fact">
+          <span class="f-ic"><Icon name="clock" /></span>
+          <div>
+            <strong>{long ? `Trwa ${untilText(e)}` : dates.length > 1 ? 'Terminy' : dayLabel(dates[0].day)}</strong>
+            {!long && (dates.length > 1
+              ? <ul class="f-dates num">{dates.map((d) => <li><time datetime={iso(d)}>{whenText(d)}</time></li>)}</ul>
+              : <span class="num"><time datetime={iso(dates[0])}>{whenText(dates[0])}</time></span>)}
+          </div>
+        </div>
+        <div class="fact">
+          <span class="f-ic"><Icon name="pin" /></span>
+          <div>
+            <strong>{e.place}</strong>
+            <span>{e.address && `${e.address} · `}<a href={map} target="_blank" rel="noopener">mapa</a></span>
+          </div>
+        </div>
+        {(e.price || e.tickets) && (
+          <div class="fact">
+            <span class="f-ic"><Icon name="link" /></span>
+            <div>
+              <strong>{e.price || 'Bilety'}</strong>
+              {e.tickets && <a class="btn f-btn" href={e.tickets} target="_blank" rel="noopener nofollow">{/wstęp wolny|bezpłat/i.test(e.price || '') ? 'Zapisy' : 'Kup bilet'} <Icon name="arrow" /></a>}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {e.cover && (
+        <figure class="art-cover">
+          <span class="ph"><Pic img={e.cover} sizes="(max-width: 900px) 100vw, 820px" eager alt={e.title} /></span>
+          <figcaption class="small soft"><Icon name="camera" class="i-inline" /> Fot. {e.photoCredit}</figcaption>
+        </figure>
+      )}
+
+      <div class="body" set:html={e.body} />
+      {e.organizer && <p class="org"><strong>Organizator:</strong> {e.organizer}</p>}
+
+      <aside class="source">
+        <span class="src-ic"><Icon name="source" /></span>
+        <p>Źródło: <a href={e.source.url} rel="noopener" target="_blank">{e.source.name}</a> – miejski portal kulturalny. Przed wyjściem sprawdź szczegóły u organizatora.</p>
+      </aside>
+      <div class="art-foot">
+        <a class="btn ghost" href={share} target="_blank" rel="noopener"><Icon name="facebook" /> Udostępnij</a>
+        <a class="btn ghost" href="/wydarzenia">Cały kalendarz <Icon name="arrow" /></a>
+      </div>
+    </div>
+
+    <aside class="art-side">
+      <div class="side-sticky"><AdSlot slot="sidebar" ads={ads} settings={settings} house /></div>
+    </aside>
+  </article>
+
+  {more.length > 0 && (
+    <section class="wrap section" aria-labelledby="h-next">
+      <div class="sec-head">
+        <h2 class="head accent" id="h-next">Najbliższe wydarzenia</h2>
+        <a class="more-link" href="/wydarzenia">Kalendarz <Icon name="arrow" /></a>
+      </div>
+      <div class="more-grid">{more.map((o, i) => <EventCard e={o.e} d={o.d} i={i} level="h3" sizes="(max-width: 1100px) 50vw, 25vw" />)}</div>
+    </section>
+  )}
+</Base>
+
+<style>
+  .art { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 56px; align-items: start; padding-top: 24px; }
+  .art-main { min-width: 0; max-width: 820px; }
+  .crumbs { display: flex; gap: 8px; color: var(--ink-soft); margin-bottom: 20px; }
+  .crumbs a:hover { color: var(--red-ink); }
+  .art-head { display: grid; gap: 18px; justify-items: start; }
+  .art-t { font-weight: 800; font-stretch: 88%; letter-spacing: -0.022em; line-height: 1.04; text-wrap: balance; font-size: clamp(1.9rem, 1rem + 2.6vw, 3.25rem); }
+  .art-lead { color: var(--ink-2); font-weight: 500; }
+  .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-top: 28px; }
+  .fact { display: flex; gap: 14px; padding: 18px; border-radius: var(--r-md); background: var(--paper); font-size: 16px; line-height: 1.4; }
+  .fact > div { display: grid; gap: 4px; align-content: start; min-width: 0; }
+  .fact a:not(.btn) { color: var(--red-ink); text-decoration: underline; text-underline-offset: 3px; }
+  .f-ic { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 10px; background: #fff; color: var(--c); flex: none; }
+  .f-ic :global(svg) { width: 20px; height: 20px; }
+  .f-dates { display: grid; gap: 2px; }
+  .f-btn { margin-top: 8px; min-height: 40px; padding: 0 16px; justify-self: start; }
+  .art-cover { margin: 28px 0 32px; }
+  .art-cover .ph { aspect-ratio: 16 / 9; border-radius: var(--r-lg); }
+  .art-cover figcaption { margin-top: 10px; display: flex; align-items: center; gap: 6px; }
+  :global(.i-inline) { width: 15px; height: 15px; display: inline-block; vertical-align: -2px; }
+  .body { font-size: clamp(1.0625rem, 1rem + 0.25vw, 1.1875rem); line-height: 1.72; max-width: 68ch; }
+  .body :global(p) { margin-bottom: 1.15em; }
+  .org { font-size: 16px; color: var(--ink-2); }
+  .source { display: flex; align-items: center; gap: 14px; margin-top: 32px; padding: 18px 22px; background: var(--paper); border-radius: var(--r-md); font-weight: 600; }
+  .src-ic { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 10px; background: #fff; color: var(--red-ink); flex: none; }
+  .source a { color: var(--red-ink); text-decoration: underline; text-underline-offset: 3px; }
+  .art-foot { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 28px; }
+  .side-sticky { position: sticky; top: 100px; display: grid; gap: 32px; }
+  .more-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--gap); }
+  @media (max-width: 1100px) {
+    .art { grid-template-columns: 1fr; }
+    .art-side { display: none; }
+    .art-main { margin-inline: auto; }
+    .more-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @media (max-width: 760px) {
+    .art { padding-top: 16px; }
+    .art-cover { margin-inline: calc(var(--m) * -1); }
+    .art-cover .ph { border-radius: 0; }
+    .art-cover figcaption { padding-inline: var(--m); }
+    .more-grid { gap: 24px 14px; }
+    .more-grid :global(.card-t) { font-size: 16px; }
+  }
+</style>

@@ -1,6 +1,6 @@
 ---
 import Icon from './Icon.astro';
-import { CATEGORIES, CATEGORY_KEYS, SITE, articleUrl, fmtDay, fmtWhen } from '../lib/site';
+import { CATEGORIES, CATEGORY_KEYS, EVENTS, SITE, articleUrl, fmtDay, fmtWhen } from '../lib/site';
 import { latest } from '../lib/db';
 interface Props { active?: string }
 const { active } = Astro.props;
@@ -34,6 +34,7 @@ const mail = `mailto:${SITE.email}?subject=${encodeURIComponent('Temat dla Częs
       {CATEGORY_KEYS.map((k) => (
         <a href={`/${k}`} aria-current={active === k ? 'page' : undefined} style={`--c:${CATEGORIES[k].color}`}>{CATEGORIES[k].name}</a>
       ))}
+      <a href="/wydarzenia" aria-current={active === 'wydarzenia' ? 'page' : undefined} style={`--c:${EVENTS.color}`}>{EVENTS.name}</a>
     </nav>
     <div class="acts">
       <a class="ico" href="/szukaj" aria-label="Szukaj" aria-current={active === 'szukaj' ? 'page' : undefined}><Icon name="search" /></a>
@@ -43,6 +44,7 @@ const mail = `mailto:${SITE.email}?subject=${encodeURIComponent('Temat dla Częs
         <div class="menu-panel">
           <a href="/">Najnowsze</a>
           {CATEGORY_KEYS.map((k) => (<a href={`/${k}`} style={`--c:${CATEGORIES[k].color}`}><span class="dot"></span>{CATEGORIES[k].title}</a>))}
+          <a href="/wydarzenia" style={`--c:${EVENTS.color}`}><span class="dot"></span>{EVENTS.name}</a>
           <a href="/szukaj">Szukaj</a>
           <a class="btn red" href={mail}><Icon name="mail" /> Zgłoś temat</a>
           <a href="/reklama" class="menu-s">Reklama na portalu</a>

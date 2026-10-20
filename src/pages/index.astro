@@ -8,6 +8,8 @@ import Tag from '../components/Tag.astro';
 import When from '../components/When.astro';
 import Icon from '../components/Icon.astro';
 import Carousel from '../components/Carousel.astro';
+import EventCard from '../components/EventCard.astro';
+import { next as nextEvents } from '../lib/events';
 import { latest, featured, settings as getSettings, ads as getAds, type Article } from '../lib/db';
 import { CATEGORIES, CATEGORY_KEYS, SITE, articleUrl, fmtWhen } from '../lib/site';
 
@@ -28,6 +30,7 @@ const sport = latest({ category: 'sport', limit: 4 });
 const powiat = latest({ category: 'powiat', limit: 4 });
 const kraj = latest({ category: 'kraj', limit: 4 });
 const ctaPics = all.filter(withPic).slice(5, 8);
+const events = nextEvents(10);
 
 const counts: Record<string, number> = { all: feed.length };
 for (const a of feed) counts[a.category] = (counts[a.category] || 0) + 1;
@@ -107,6 +110,14 @@ const mail = `mailto:${SITE.email}?subject=${encodeURIComponent('Temat dla Częs
     <div class="wrap section">
       <Carousel title="Z Częstochowy" href="/miasto" linkText="Wszystkie" id="h-miasto">
         {miasto.map((a, i) => <Card a={a} i={i % 4} sizes="(max-width: 760px) 74vw, 320px" />)}
+      </Carousel>
+    </div>
+  )}
+
+  {events.length > 3 && (
+    <div class="wrap section">
+      <Carousel title="Co się dzieje w mieście" href="/wydarzenia" linkText="Cały kalendarz" id="h-events">
+        {events.map((o, i) => <EventCard e={o.e} d={o.d} i={i % 4} />)}
       </Carousel>
     </div>
   )}

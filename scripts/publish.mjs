@@ -1,5 +1,5 @@
-// Publikacja portalu: (import z czestochowa.pl i wczestochowie.pl) → (wirtualny redaktor) → zdjęcia z panelu → zmiany z bazy → build Astro → Firebase Hosting
-// Użycie: node scripts/publish.mjs [--import] [--redaktor] [--no-deploy]
+// Publikacja portalu: (import z czestochowa.pl i wczestochowie.pl) → (wirtualny redaktor) → (kalendarz wydarzeń CGK) → zdjęcia z panelu → zmiany z bazy → build Astro → Firebase Hosting
+// Użycie: node scripts/publish.mjs [--import] [--redaktor] [--wydarzenia] [--no-deploy]
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { execSync } from 'node:child_process';
@@ -8,6 +8,7 @@ import { db, warsawNow } from '../lib/firestore.js';
 import { importLatest, importWczestochowie } from '../lib/importer.js';
 import { runRedaktor } from '../lib/redaktor.js';
 import { aiCandidate } from '../lib/images.js';
+import { importCgk } from '../lib/cgk.js';
 
 const args = new Set(process.argv.slice(2));
 const firestore = db();
@@ -115,6 +116,15 @@ if (args.has('--redaktor') || build.redaktorRequested) {
     .catch((e) => ({ checked: 0, drafts: [], skipped: [], duplicates: 0, errors: [e.message], pruned: [] }));
   await firestore.collection('redaktor_runs').add({ ...redaktorResult, trigger: build.redaktorRequested ? 'manual' : 'schedule', at: FieldValue.serverTimestamp() });
   log(`redaktor: nowych szkiców ${redaktorResult.drafts.length}, pominiętych ${redaktorResult.skipped.length}, powtórek ${redaktorResult.duplicates}, błędów ${redaktorResult.errors.length}`);
+}
+
+// 1b'. kalendarz wydarzeń z cgk.czestochowa.pl (przy imporcie i przy każdym uruchomieniu redaktora, czyli co ~2 godziny)
+let cgkResult = null;
+if (importResult || redaktorResult || args.has('--wydarzenia')) {
+  log('kalendarz wydarzeń z cgk.czestochowa.pl…');
+  cgkResult = await importCgk({ maxRewrites: Number(process.env.CGK_MAX || 20), log })
+    .catch((e) => ({ found: 0, added: [], rewritten: [], removed: [], errors: [e.message] }));
+  log(`wydarzenia: w kanale ${cgkResult.found}, nowych ${cgkResult.added.length}, przeredagowanych ${cgkResult.rewritten.length}, zakończonych ${cgkResult.removed.length}, błędów ${cgkResult.errors.length}`);
 }
 
 // 1c. nowe ilustracje AI zamówione w panelu (generator blokuje zapytania z przeglądarki, więc robi je automat)

@@ -1,0 +1,184 @@
+---
+import Base from '../../layouts/Base.astro';
+import AdSlot from '../../components/AdSlot.astro';
+import Pic from '../../components/Pic.astro';
+import Icon from '../../components/Icon.astro';
+import Carousel from '../../components/Carousel.astro';
+import EventCard from '../../components/EventCard.astro';
+import { settings as getSettings, ads as getAds } from '../../lib/db';
+import { EVENTS } from '../../lib/site';
+import { upcoming, ongoing, eventTypes, eventUrl, dayLabel, dayNum, monthShort, type Occurrence } from '../../lib/events';
+
+const settings = getSettings();
+const ads = getAds();
+const occ = upcoming();
+const days: [string, Occurrence[]][] = [];
+for (const o of occ) {
+  const last = days[days.length - 1];
+  if (last && last[0] === o.d.day) last[1].push(o);
+  else days.push([o.d.day, [o]]);
+}
+const DAYS_SHOWN = 10;
+const long = ongoing();
+const types = eventTypes();
+const count = (t: string) => new Set(occ.filter((o) => o.e.type === t).map((o) => o.e.slug)).size + long.filter((e) => e.type === t).length;
+const jsonld = {
+  '@context': 'https://schema.org',
+  '@type': 'ItemList',
+  itemListElement: occ.filter((o) => o.e.ready).slice(0, 30).map((o, i) => ({ '@type': 'ListItem', position: i + 1, url: new URL(eventUrl(o.e), Astro.site).toString() })),
+};
+---
+<Base title="Wydarzenia w Częstochowie – co, gdzie, kiedy" description={EVENTS.lede} settings={settings} active="wydarzenia" jsonld={jsonld}>
+  <section class="wrap c-head" style={`--c:${EVENTS.color}`}>
+    <div>
+      <span class="tag">{EVENTS.name}</span>
+      <h1 class="t-xl">{EVENTS.title}</h1>
+      <p class="lead soft">{EVENTS.lede}</p>
+    </div>
+    {types.length > 1 && (
+      <div class="ev-seg" role="group" aria-label="Rodzaj wydarzenia" data-types>
+        <button type="button" aria-pressed="true" data-type="">Wszystkie</button>
+        {types.map((t) => <button type="button" aria-pressed="false" data-type={t}>{t}<span class="num">{count(t)}</span></button>)}
+      </div>
+    )}
+  </section>
+
+  {long.length > 0 && (
+    <div class="wrap section ev-long" data-long>
+      <Carousel title="Wystawy i konkursy, które trwają" id="h-long">
+        {long.map((e, i) => <div data-item={e.type}><EventCard e={e} i={i % 4} until /></div>)}
+      </Carousel>
+    </div>
+  )}
+
+  <section class="wrap section ev-body" aria-labelledby="h-agenda" style={`--c:${EVENTS.color}`}>
+    <div>
+      <h2 class="head accent" id="h-agenda">Kalendarz dzień po dniu</h2>
+      {days.length === 0 && <p class="empty">Na razie nie mamy zapowiedzi na najbliższe dni. Zajrzyj jutro.</p>}
+      <div class="agenda" data-agenda>
+        {days.map(([day, list], k) => (
+          <section class="day" data-day={day} hidden={k >= DAYS_SHOWN ? true : undefined} aria-label={dayLabel(day)}>
+            <div class="day-h">
+              <span class="day-n num">{dayNum(day)}</span>
+              <span class="day-w"><strong>{dayLabel(day)}</strong><span>{monthShort(day)}</span></span>
+            </div>
+            <ul class="day-list">
+              {list.map((o) => (
+                <li data-item={o.e.type}>
+                  <a class="ag" href={eventUrl(o.e)} target={o.e.ready ? undefined : '_blank'} rel={o.e.ready ? undefined : 'noopener'}>
+                    <span class="ag-time num">{o.d.time || 'cały dzień'}</span>
+                    <span class="ag-body">
+                      <span class="card-meta"><span class="tag">{o.e.type}</span></span>
+                      <h3 class="ag-t">{o.e.title}</h3>
+                      <span class="ag-place"><Icon name="pin" class="i-inline" /> {o.e.place}</span>
+                    </span>
+                    <span class="ph ag-pic"><Pic img={o.e.cover} sizes="(max-width: 760px) 88px, 160px" alt="" /></span>
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))}
+      </div>
+      <p class="empty" hidden data-none>Brak wydarzeń tego rodzaju w najbliższych dniach.</p>
+      {days.length > DAYS_SHOWN && <div class="ag-more"><button class="btn ghost" type="button" data-more>Pokaż kolejne dni</button></div>}
+    </div>
+    <aside class="c-side">
+      <div class="side-sticky">
+        <div class="side-box src-box">
+          <h2 class="side-h">Skąd te wydarzenia</h2>
+          <p>Kalendarz powstaje na podstawie <a href="https://cgk.czestochowa.pl/" target="_blank" rel="noopener">cgk.czestochowa.pl</a> – miejskiego portalu kulturalnego. Opisy redagujemy sami, zdjęcia pochodzą od organizatorów.</p>
+          <p>Organizujesz coś w Częstochowie? <a href="mailto:czestokocham@gmail.com?subject=Wydarzenie%20do%20kalendarza">Napisz do nas</a>.</p>
+        </div>
+        <AdSlot slot="sidebar" ads={ads} settings={settings} house />
+      </div>
+    </aside>
+  </section>
+
+  <script is:inline>
+    (function () {
+      var agenda = document.querySelector('[data-agenda]');
+      if (!agenda) return;
+      var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+      var now = new Date(), today = now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate());
+      var days = [].slice.call(agenda.querySelectorAll('[data-day]')).filter(function (d) {
+        if (d.dataset.day < today) { d.remove(); return false; } // strona statyczna – minione dni chowamy w przeglądarce
+        return true;
+      });
+      var more = document.querySelector('[data-more]'), none = document.querySelector('[data-none]'), seg = document.querySelector('[data-types]');
+      var type = '', limit = 10;
+      function render() {
+        var shown = 0, total = 0;
+        days.forEach(function (d) {
+          var any = false;
+          d.querySelectorAll('[data-item]').forEach(function (li) { var ok = !type || li.dataset.item === type; li.hidden = !ok; any = any || ok; });
+          if (any) total++;
+          d.hidden = !(any && shown < limit);
+          if (!d.hidden) shown++;
+        });
+        document.querySelectorAll('[data-long] [data-item]').forEach(function (x) { x.hidden = !!type && x.dataset.item !== type; });
+        if (more) more.hidden = total <= limit;
+        none.hidden = total > 0;
+      }
+      if (seg) seg.addEventListener('click', function (e) {
+        var b = e.target.closest('[data-type]');
+        if (!b) return;
+        type = b.dataset.type; limit = 10;
+        seg.querySelectorAll('[data-type]').forEach(function (x) { x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); });
+        render();
+      });
+      if (more) more.addEventListener('click', function () { limit += 10; render(); });
+      render();
+    })();
+  </script>
+</Base>
+
+<style>
+  .c-head { display: grid; gap: 28px; padding-top: clamp(28px, 4vw, 56px); }
+  .c-head h1 { margin: 14px 0 10px; }
+  .c-head .lead { max-width: 52ch; }
+  .ev-seg { display: flex; gap: 6px; flex-wrap: wrap; }
+  .ev-seg button { display: inline-flex; align-items: center; gap: 8px; padding: 9px 14px; border: 0; border-radius: 999px; background: var(--paper); color: var(--ink); font: inherit; font-weight: 650; font-size: 15px; cursor: pointer; transition: background-color 0.2s, color 0.2s; }
+  .ev-seg button span { font-size: 12.5px; opacity: 0.7; }
+  .ev-seg button:hover { background: var(--tone-2); }
+  .ev-seg button[aria-pressed='true'] { background: var(--c); color: #fff; }
+  .ev-long { margin-top: 48px; }
+  .ev-long [hidden] { display: none; }
+  .ev-body { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 48px; align-items: start; }
+  .ev-body .head { margin-bottom: 16px; }
+  .day { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 24px; padding: 24px 0; border-top: 1px solid var(--line); }
+  .day[hidden], .day-list li[hidden] { display: none; }
+  .day-h { position: sticky; top: 96px; align-self: start; display: flex; align-items: center; gap: 12px; }
+  .day-n { font-size: 56px; font-weight: 850; font-stretch: 80%; letter-spacing: -0.04em; line-height: 0.9; color: var(--c); }
+  .day-w { display: grid; gap: 2px; font-size: 15px; line-height: 1.2; }
+  .day-w span { color: var(--ink-soft); }
+  .day-list { display: grid; gap: 4px; }
+  .ag { display: grid; grid-template-columns: 76px minmax(0, 1fr) 160px; gap: 18px; align-items: center; padding: 12px; margin: 0 -12px; border-radius: var(--r-md); transition: background-color 0.2s; }
+  .ag:hover { background: var(--paper); }
+  .ag-time { font-weight: 800; font-size: 18px; align-self: start; padding-top: 2px; }
+  .ag-body { display: grid; gap: 6px; min-width: 0; }
+  .ag-t { font-size: 19px; font-weight: 700; line-height: 1.25; letter-spacing: -0.01em; text-wrap: pretty; transition: color 0.2s; }
+  .ag:hover .ag-t { color: var(--red-ink); }
+  .ag-place { font-size: 15px; color: var(--ink-soft); }
+  .ag-place :global(svg) { color: var(--c); }
+  .ag-pic { aspect-ratio: 3 / 2; border-radius: var(--r-sm); }
+  .ag:hover .ag-pic :global(img) { transform: scale(1.05); }
+  .ag-more { margin-top: 24px; }
+  .empty { padding: 18px 22px; border-radius: var(--r-md); background: var(--paper); color: var(--ink-2); }
+  .side-sticky { position: sticky; top: 100px; display: grid; gap: 32px; }
+  .side-box { background: var(--paper); border-radius: var(--r-lg); padding: 8px 20px 18px; }
+  .side-h { font-size: 18px; font-weight: 800; padding: 14px 0 8px; }
+  .src-box p { font-size: 16px; line-height: 1.5; color: var(--ink-2); }
+  .src-box p + p { margin-top: 10px; }
+  .src-box a { color: var(--red-ink); text-decoration: underline; text-underline-offset: 3px; }
+  @media (max-width: 1100px) { .ev-body { grid-template-columns: 1fr; } .c-side { order: 2; } .side-sticky { position: static; } }
+  @media (max-width: 760px) {
+    .day { grid-template-columns: 1fr; gap: 8px; padding: 18px 0; }
+    .day-h { position: static; }
+    .day-n { font-size: 44px; }
+    .ag { grid-template-columns: minmax(0, 1fr) 88px; gap: 14px; padding: 10px; margin: 0 -10px; }
+    .ag-time { grid-column: 1 / -1; font-size: 16px; padding: 0; }
+    .ag-t { font-size: 17px; }
+    .ag-pic { aspect-ratio: 1; }
+  }
+</style>

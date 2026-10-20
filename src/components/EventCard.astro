@@ -1,0 +1,30 @@
+---
+// Karta wydarzenia: zdjęcie z datą, rodzaj, tytuł, miejsce
+import Pic from './Pic.astro';
+import Icon from './Icon.astro';
+import { EVENTS } from '../lib/site';
+import { eventUrl, dayNum, monthShort, untilText, type CityEvent, type EventDate } from '../lib/events';
+interface Props { e: CityEvent; d?: EventDate; i?: number; sizes?: string; level?: 'h2' | 'h3'; until?: boolean }
+const { e, d = e.dates[0], i = 0, sizes = '(max-width: 760px) 74vw, 320px', level = 'h3', until = false } = Astro.props;
+const H = level;
+const ext = !e.ready;
+---
+<a class="card ev rise" href={eventUrl(e)} style={`--i:${i};--c:${EVENTS.color}`} target={ext ? '_blank' : undefined} rel={ext ? 'noopener' : undefined}>
+  <span class="ph ev-ph">
+    <Pic img={e.cover} sizes={sizes} alt="" />
+    <span class="ev-date num" aria-hidden="true">{until ? <><small>do</small><b>{dayNum(e.dates[e.dates.length - 1].day)}</b><small>{monthShort(e.dates[e.dates.length - 1].day)}</small></> : <><b>{dayNum(d.day)}</b><small>{monthShort(d.day)}</small></>}</span>
+  </span>
+  <span class="card-meta"><span class="tag">{e.type}</span>{until ? <span>{untilText(e)}</span> : d.time && <span class="num"><Icon name="clock" class="i-inline" /> {d.time}</span>}</span>
+  <H class="card-t">{e.title}</H>
+  <span class="ev-place"><Icon name="pin" class="i-inline" /> {e.place}</span>
+</a>
+<style>
+  .ev-ph { position: relative; }
+  .ev-date { position: absolute; left: 12px; top: 12px; display: grid; justify-items: center; min-width: 56px; padding: 8px 8px 7px; border-radius: 12px; background: #fff; color: var(--ink); line-height: 1; }
+  .ev-date b { font-size: 24px; font-weight: 850; font-stretch: 85%; letter-spacing: -0.02em; }
+  .ev-date small { font-size: 12.5px; font-weight: 700; color: var(--c); margin-top: 3px; }
+  .ev-date small:first-child { margin: 0 0 3px; color: var(--ink-soft); }
+  .ev-place { display: flex; align-items: center; gap: 6px; font-size: 15px; color: var(--ink-soft); margin-top: -4px; }
+  .ev-place :global(svg) { color: var(--c); flex: none; }
+  :global(.i-inline) { width: 15px; height: 15px; display: inline-block; vertical-align: -2px; }
+</style>

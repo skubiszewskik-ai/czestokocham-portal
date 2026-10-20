@@ -1,11 +1,14 @@
 import type { APIRoute } from 'astro';
 import { latest } from '../lib/db';
 import { CATEGORY_KEYS, articleUrl } from '../lib/site';
+import { allEvents } from '../lib/events';
 export const GET: APIRoute = async ({ site }) => {
   const items = await latest({ limit: 1000 });
   const urls = [
     ['/', new Date()],
     ...CATEGORY_KEYS.map((k) => [`/${k}`, new Date()]),
+    ['/wydarzenia', new Date()],
+    ...allEvents().filter((e) => e.ready).map((e) => [`/wydarzenia/${e.slug}`, null]),
     ['/o-nas', null], ['/reklama', null], ['/regulamin', null], ['/polityka-prywatnosci', null],
     ...items.map((a) => [articleUrl(a), a.updatedAt || a.publishedAt]),
   ] as [string, Date | null][];
