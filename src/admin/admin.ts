@@ -1329,7 +1329,7 @@ $('#ad-del').addEventListener('click', async () => {
 });
 
 // ---------------- redaktor AI ----------------
-const IMG_SRC: Record<string, string> = { miasto: 'archiwum zdjęć czestochowa.pl', bank: 'bank zdjęć redakcji', wikimedia: 'Wikimedia Commons', wikipedia: 'Wikipedia', openverse: 'Openverse (Creative Commons)', pexels: 'Pexels (zdjęcie stockowe)', ai: 'ilustracja AI', plansza: 'plansza z tytułem', zrodlo: 'zdjęcie z artykułu źródłowego', wlasne: 'wgrane przez redakcję' };
+const IMG_SRC: Record<string, string> = { miasto: 'archiwum zdjęć czestochowa.pl', bank: 'bank zdjęć redakcji', wikimedia: 'Wikimedia Commons', wikipedia: 'Wikipedia', openverse: 'Openverse (Creative Commons)', pexels: 'Pexels (zdjęcie stockowe)', pixabay: 'Pixabay (zdjęcie stockowe)', ai: 'ilustracja AI', plansza: 'plansza z tytułem', zrodlo: 'zdjęcie z artykułu źródłowego', wlasne: 'wgrane przez redakcję' };
 async function redCount() {
   const snap = await getDocs(query(collection(db, 'articles'), where('origin', '==', 'redaktor'), where('status', '==', 'draft')));
   $('#red-n').textContent = String(snap.size);
