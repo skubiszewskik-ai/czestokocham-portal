@@ -57,3 +57,53 @@ function instaluj() {
   console.log(`teraz: ${whatToDo()}`);
   budzik();
 }
+
+// ---------- Licznik polubień Facebooka (strona główna) ----------
+// Ten sam projekt jest wdrożony jako aplikacja internetowa (Wdróż → Aplikacja internetowa, „Każdy”).
+// Strona pyta ją co kilka sekund; skrypt pyta Facebooka najwyżej raz na FB_TTL sekund, resztę podaje z pamięci
+// podręcznej, więc niezależnie od liczby czytelników mieści się w limicie 20 000 zapytań dziennie.
+// Token strony leży we Właściwościach skryptu (FB_PAGE_TOKEN), nigdy w kodzie ani w przeglądarce.
+const FB_PAGE = 'czestokocham';
+const FB_TTL = 6; // sekund
+
+function doGet() {
+  return ContentService.createTextOutput(JSON.stringify(fbCounts())).setMimeType(ContentService.MimeType.JSON);
+}
+
+function fbCounts() {
+  const cache = CacheService.getScriptCache();
+  const hit = cache.get('fb');
+  if (hit) return JSON.parse(hit);
+  const props = PropertiesService.getScriptProperties();
+  let out;
+  try {
+    const res = UrlFetchApp.fetch(`https://graph.facebook.com/v26.0/${props.getProperty('FB_PAGE_ID') || FB_PAGE}?fields=fan_count,followers_count&access_token=${encodeURIComponent(props.getProperty('FB_PAGE_TOKEN'))}`, { muteHttpExceptions: true });
+    const j = JSON.parse(res.getContentText());
+    if (!j.fan_count) throw new Error(JSON.stringify(j.error || j));
+    out = { likes: j.fan_count, followers: j.followers_count || null, t: Date.now() };
+    props.setProperty('FB_LAST', JSON.stringify(out));
+  } catch (e) {
+    console.error(`Facebook: ${e}`);
+    out = JSON.parse(props.getProperty('FB_LAST') || '{}'); // ostatnia znana liczba zamiast błędu na stronie
+    out.stale = true;
+  }
+  cache.put('fb', JSON.stringify(out), out.stale ? 30 : FB_TTL);
+  return out;
+}
+
+// Jednorazowo: wklej we Właściwościach skryptu FB_USER_TOKEN (długoterminowy token użytkownika z Graph API Explorer)
+// i uruchom tę funkcję – zamieni go na bezterminowy token strony (aplikacja Meta „Czestokocham Licznik”, ID 1147762300971771)
+// i usunie token użytkownika.
+function ustawFacebook() {
+  const props = PropertiesService.getScriptProperties();
+  const user = props.getProperty('FB_USER_TOKEN');
+  if (!user) throw new Error('Brak FB_USER_TOKEN we Właściwościach skryptu');
+  // strona należy do portfolio firmowego, więc nie ma jej w me/accounts – pytamy ją wprost o token
+  const page = JSON.parse(UrlFetchApp.fetch(`https://graph.facebook.com/v26.0/${FB_PAGE}?fields=id,name,access_token&access_token=${encodeURIComponent(user)}`, { muteHttpExceptions: true }).getContentText());
+  if (page.error || !page.access_token) throw new Error(page.error ? page.error.message : 'Facebook nie zwrócił tokena strony');
+  props.setProperty('FB_PAGE_TOKEN', page.access_token);
+  props.setProperty('FB_PAGE_ID', page.id);
+  props.deleteProperty('FB_USER_TOKEN');
+  CacheService.getScriptCache().remove('fb');
+  console.log(`token strony „${page.name}” zapisany:`, fbCounts());
+}

@@ -9,6 +9,7 @@ import When from '../components/When.astro';
 import Icon from '../components/Icon.astro';
 import Carousel from '../components/Carousel.astro';
 import EventCard from '../components/EventCard.astro';
+import FbCounter from '../components/FbCounter.astro';
 import { next as nextEvents } from '../lib/events';
 import { latest, featured, settings as getSettings, ads as getAds, type Article } from '../lib/db';
 import { CATEGORIES, CATEGORY_KEYS, SITE, articleUrl, fmtWhen } from '../lib/site';
@@ -97,6 +98,8 @@ const mail = `mailto:${SITE.email}?subject=${encodeURIComponent('Temat dla Częs
       {TOPICS.map(([name, q]) => <li><a href={`/szukaj?q=${encodeURIComponent(q || name)}`}>{name}</a></li>)}
     </ul>
   </nav>
+
+  <FbCounter />
 
   {top4.length > 0 && (
     <section class="wrap grid4" aria-label="Wyróżnione">

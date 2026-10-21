@@ -6,6 +6,8 @@ export const SITE = {
   email: 'czestokocham@gmail.com',
   phone: '884 971 219',
   facebook: 'https://www.facebook.com/czestokocham',
+  // licznik polubień na żywo – aplikacja internetowa Budzika (scripts/budzik.gs → doGet)
+  fbCounter: 'https://script.google.com/macros/s/AKfycbx43lRfEsc9KoGwBX8H8A6kkhxedYCmZd8DSIb_vjMJWK8orc57XPP2zZSBIb9iU5ov/exec',
   lang: 'pl',
 };
 

@@ -1,0 +1,141 @@
+---
+// Licznik polubień fanpage'a na żywo. Liczby podaje aplikacja internetowa Budzika (scripts/budzik.gs → doGet),
+// która trzyma token strony u siebie; tu tylko odpytujemy ją co kilka sekund, gdy karta jest widoczna.
+// Przy budowaniu pobieramy liczbę raz, żeby strona miała ją w HTML także bez JavaScriptu.
+import Icon from './Icon.astro';
+import { SITE } from '../lib/site';
+
+let likes: number | null = null;
+let followers: number | null = null;
+if (SITE.fbCounter) {
+  try {
+    const r = await fetch(SITE.fbCounter, { signal: AbortSignal.timeout(8000) });
+    const j = await r.json();
+    if (j.likes) ({ likes, followers = null } = j);
+  } catch {}
+}
+const fmt = (n: number) => n.toLocaleString('pl-PL').replace(/\s/g, ' ');
+---
+<section class="wrap fbc-wrap" aria-labelledby="h-fbc">
+  <div class="fbc" data-fbc={SITE.fbCounter} data-likes={likes ?? ''}>
+    <div class="fbc-count">
+      <p class="fbc-n num" data-n>{likes ? fmt(likes) : '30 000+'}</p>
+      <span class="fbc-plus num" aria-hidden="true" data-plus></span>
+    </div>
+    <div class="fbc-text">
+      <h2 class="fbc-h" id="h-fbc"><span class="pulse" aria-hidden="true"></span>Tyle osób lubi nas na Facebooku</h2>
+      <p class="fbc-p">Licznik zmienia się na żywo, kiedy ktoś klika „Lubię to”.<span data-f hidden={!followers || followers === likes || undefined}> Obserwuje nas <b class="num" data-fn>{followers ? fmt(followers) : ''}</b> osób.</span></p>
+    </div>
+    <a class="btn white fbc-btn" href={SITE.facebook} target="_blank" rel="noopener"><Icon name="facebook" /> Polub Częstokocham</a>
+  </div>
+</section>
+
+<script is:inline>
+  (function () {
+    var box = document.querySelector('[data-fbc]');
+    if (!box || !box.dataset.fbc || !window.fetch) return;
+    var url = box.dataset.fbc, nEl = box.querySelector('[data-n]'), plus = box.querySelector('[data-plus]');
+    var fWrap = box.querySelector('[data-f]'), fEl = box.querySelector('[data-fn]');
+    var KEY = 'fbc', cur = Number(box.dataset.likes) || 0, timer, busy = false, live = false;
+    var still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var fmt = function (n) { return n.toLocaleString('pl-PL').replace(/\s/g, ' '); };
+
+    // każda cyfra to kolumna 0–9 przesuwana w pionie – zmiana liczby „przewija” tylko te cyfry, które się zmieniły
+    function build(n) {
+      var s = fmt(n), html = '';
+      for (var i = 0; i < s.length; i++) {
+        var c = s[i];
+        if (c >= '0' && c <= '9') {
+          var col = '';
+          for (var d = 0; d <= 9; d++) col += '<span>' + d + '</span>';
+          html += '<span class="fbc-d" aria-hidden="true"><span class="fbc-col" style="--d:' + c + '">' + col + '</span></span>';
+        } else html += '<span class="fbc-sep" aria-hidden="true">' + c + '</span>';
+      }
+      nEl.innerHTML = html + '<span class="sr-only">' + s + '</span>';
+    }
+    function show(n, animate) {
+      var s = fmt(n), cols = nEl.querySelectorAll('.fbc-col');
+      if (!animate || cols.length !== s.replace(/\D/g, '').length) {
+        build(n);
+      } else {
+        var k = 0;
+        for (var i = 0; i < s.length; i++) if (s[i] >= '0' && s[i] <= '9') cols[k++].style.setProperty('--d', s[i]);
+        nEl.querySelector('.sr-only').textContent = s;
+      }
+    }
+    function pop(diff) {
+      if (still || diff <= 0) return;
+      plus.textContent = '+' + diff;
+      plus.classList.remove('go'); void plus.offsetWidth; plus.classList.add('go');
+      box.classList.remove('hit'); void box.offsetWidth; box.classList.add('hit');
+    }
+    function apply(d, animate) {
+      if (!d || !d.likes) return;
+      if (d.likes !== cur) {
+        var diff = d.likes - cur;
+        show(d.likes, animate && cur > 0);
+        if (animate && live) pop(diff); // „+1” tylko dla lajków, które przyszły, gdy strona była otwarta
+        cur = d.likes;
+      }
+      var f = d.followers && d.followers !== d.likes; // zwykle obie liczby są równe – wtedy nie dublujemy
+      if (f) fEl.textContent = fmt(d.followers);
+      fWrap.hidden = !f;
+    }
+
+    // najpierw ostatnia liczba z tej przeglądarki (jeśli nowsza niż z budowania), potem świeża z serwera
+    try { var saved = JSON.parse(localStorage.getItem(KEY)); if (saved && saved.t > Date.now() - 864e5) cur = saved.likes || cur; } catch (e) {}
+    if (cur) show(cur, false);
+
+    function tick() {
+      clearTimeout(timer);
+      if (document.hidden || busy) return;
+      busy = true;
+      fetch(url, { cache: 'no-store' })
+        .then(function (r) { return r.json(); })
+        .then(function (d) { apply(d, true); if (d.likes) live = true; try { localStorage.setItem(KEY, JSON.stringify(d)); } catch (e) {} })
+        .catch(function () {})
+        .then(function () { busy = false; timer = setTimeout(tick, inView ? 4000 : 30000); });
+    }
+    var inView = true;
+    if ('IntersectionObserver' in window) new IntersectionObserver(function (e) { var was = inView; inView = e[0].isIntersecting; if (inView && !was) tick(); }).observe(box);
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) tick(); });
+    tick();
+  })();
+</script>
+
+<style>
+  .fbc-wrap { margin-top: 22px; }
+  .fbc { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 20px clamp(20px, 3vw, 44px); padding: clamp(20px, 2.6vw, 32px) clamp(22px, 3vw, 40px); border-radius: var(--r-xl); background: var(--navy); color: #fff; overflow: hidden; isolation: isolate; }
+  .fbc-count { position: relative; }
+  .fbc-n { display: flex; font-weight: 900; font-stretch: 75%; font-size: clamp(3.25rem, 1.6rem + 5vw, 6.5rem); line-height: 1; letter-spacing: -0.035em; white-space: nowrap; }
+  /* cyfry dokleja skrypt, więc style muszą być globalne */
+  .fbc-n :global(.fbc-d) { display: inline-block; height: 1em; overflow: hidden; }
+  .fbc-n :global(.fbc-col) { display: flex; flex-direction: column; transform: translateY(calc(var(--d) * -1em)); transition: transform 0.9s var(--ease); }
+  .fbc-n :global(.fbc-col span), .fbc-n :global(.fbc-sep) { height: 1em; line-height: 1; }
+  .fbc-n :global(.fbc-sep) { width: 0.16em; }
+  .fbc-plus { position: absolute; left: calc(100% + 6px); top: -4px; font-weight: 900; font-size: clamp(1.25rem, 1rem + 1vw, 2rem); color: var(--red-ink); background: #fff; padding: 0.1em 0.4em; border-radius: 999px; opacity: 0; pointer-events: none; }
+  .fbc-plus.go { animation: fbc-plus 2.2s var(--ease) forwards; }
+  @keyframes fbc-plus { 0% { opacity: 0; transform: translateY(10px) scale(0.6); } 15% { opacity: 1; transform: translateY(0) scale(1.08); } 25% { transform: scale(1); } 75% { opacity: 1; transform: translateY(-18px); } 100% { opacity: 0; transform: translateY(-34px); } }
+  .fbc.hit { animation: fbc-hit 1.2s var(--ease); }
+  @keyframes fbc-hit { 0% { background: var(--navy); } 12% { background: var(--red); } 100% { background: var(--navy); } }
+  .fbc-text { display: grid; gap: 8px; }
+  .fbc-h { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: clamp(1.25rem, 1rem + 0.8vw, 1.75rem); line-height: 1.1; letter-spacing: -0.015em; text-wrap: balance; }
+  .fbc-h .pulse { flex: none; width: 10px; height: 10px; border-radius: 50%; background: var(--red); box-shadow: 0 0 0 0 rgb(227 20 27 / 0.6); animation: fbc-pulse 1.8s infinite; }
+  @keyframes fbc-pulse { 70% { box-shadow: 0 0 0 10px rgb(227 20 27 / 0); } 100% { box-shadow: 0 0 0 0 rgb(227 20 27 / 0); } }
+  .fbc-p { color: var(--on-navy-soft); font-size: 16px; line-height: 1.45; max-width: 52ch; }
+  .fbc-p b { color: #fff; font-weight: 700; }
+  .fbc-btn:hover { background: var(--red); }
+
+  @media (max-width: 900px) {
+    .fbc { grid-template-columns: 1fr; gap: 14px; }
+    .fbc-btn { justify-self: start; }
+  }
+  @media (max-width: 760px) {
+    .fbc-wrap { margin-top: 12px; }
+    .fbc { border-radius: var(--r-lg); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .fbc-n :global(.fbc-col) { transition: none; }
+    .fbc-h .pulse { animation: none; }
+  }
+</style>
