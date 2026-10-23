@@ -92,6 +92,18 @@
           }
         ]
       }
+    ],
+    "redirects": [
+      {
+        "source": "/kontakt",
+        "destination": "/o-nas",
+        "type": 301
+      },
+      {
+        "source": "/kontakt/**",
+        "destination": "/o-nas",
+        "type": 301
+      }
     ]
   },
   "firestore": {
