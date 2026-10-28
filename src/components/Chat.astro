@@ -102,6 +102,7 @@ const hints = ['Co robić w weekend w Częstochowie?', 'Jakie są dziś wydarzen
       }
       function render(md) {
         md = md.replace(/【[^】]*】/g, '');
+        md = md.replace(/^\s*\*\*[^*\n]+\?\*\*\s*\n+/, ''); // pogrubione powtórzenie pytania na początku
         var out = '', list = false;
         md.split('\n').forEach(function (line) {
           // wiersze tabel zamieniamy na punkty listy, separatory tabel pomijamy

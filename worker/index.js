@@ -8,6 +8,9 @@ const MAX_CHARS = 1200;
 // lokalne portale informacyjne (konkurencja) – asystent ich nie poleca ani nie linkuje; ta sama lista blokuje linki w widgecie
 const RIVALS = ['wczestochowie.pl', 'czestochowskie.pl', 'czestochowskie24.pl', 'czestochowaonline.pl', 'gazetacz.com.pl', 'zycieczestochowy.pl', 'zycieregionu.com.pl', 'gazetaregionalna.com', 'miejska.pl', 'sport.czest.pl', 'wpowiecie.pl', 'radiojura.pl', 'fiat.fm', 'wyborcza.pl', 'naszemiasto.pl', 'dziennikzachodni.pl'];
 
+// te same portale tak, jak pojawiają się w tekstach (bez polskich znaków, małymi literami)
+const RIVAL_TEXT = new RegExp([...RIVALS.map((r) => r.replace(/\./g, '\\.')), 'czestochowskie24', 'wczestochowie', 'czestochowa ?online', 'gazeta ?cz\\b', 'gazeta czestochowska', 'zycie czestochowy', 'zycie regionu', 'gazeta regionalna', 'w ?powiecie\\.pl', 'radio ?jura', 'radio ?fiat', 'gazeta wyborcza', 'wyborcza', 'nasze ?miasto', 'dziennik zachodni'].join('|'));
+
 const SYSTEM = `Jesteś Asystentem Częstokocham – przewodnikiem po Częstochowie i powiecie częstochowskim, stworzonym przez redakcję portalu Częstokocham (czestokocham.pl). Mówisz po polsku, ciepło i konkretnie, jak życzliwy mieszkaniec, który zna miasto.
 
 SKĄD BIERZESZ WIEDZĘ (w tej kolejności)
@@ -122,7 +125,7 @@ const ARTICLE_MAX = 6000;
 /** Treść artykułu prosto ze strony portalu (nie od przeglądarki) – tytuł, lead, data, akapity; pamiętana godzinę */
 async function loadArticle(env, path, ctxWait) {
   const url = `${env.SITE}${path}`;
-  const key = new Request(`${url}?ai-text`);
+  const key = new Request(`${url}?ai-text=2`);
   const cache = caches.default;
   const hit = await cache.match(key);
   if (hit) return hit.json();
@@ -142,7 +145,8 @@ async function loadArticle(env, path, ctxWait) {
     .on('.body p, .body li, .body h2, .body h3, .body blockquote', grab('body'))
     .transform(res).arrayBuffer();
   if (!parts.title || !parts.body.length) return null;
-  let body = parts.body.join('\n');
+  // zdania z nazwami innych portali wycinamy, zanim tekst trafi do modelu – słabszy model zapasowy potrafi je powtórzyć
+  let body = parts.body.map((t) => t.split(/(?<=[.!?…])\s+/).filter((x) => !RIVAL_TEXT.test(norm(x))).join(' ')).filter(Boolean).join('\n');
   if (body.length > ARTICLE_MAX) body = body.slice(0, ARTICLE_MAX) + '…';
   const art = { path, title: parts.title, lead: parts.lead, date: parts.date, source: parts.source, body };
   ctxWait.waitUntil(cache.put(key, new Response(JSON.stringify(art), { headers: { 'content-type': 'application/json', 'Cache-Control': 'public, max-age=3600' } })));
