@@ -162,7 +162,7 @@ const hints: Hint[] = /^\/wydarzenia\/[^/]+/.test(path)
       }
       function clear() {
         if (ctrl) ctrl.abort();
-        if (window.speechSynthesis) speechSynthesis.cancel();
+        stopSpeaking();
         history = []; try { sessionStorage.removeItem(KEY); } catch (e) {}
         [].forEach.call(log.querySelectorAll('.chat-msg'), function (m, i) { if (i) m.remove(); });
         resetBtn.hidden = true; setAbout(null);
@@ -223,25 +223,77 @@ const hints: Hint[] = /^\/wydarzenia\/[^/]+/.test(path)
           try { rec.start(); } catch (e) { rec = null; mic.classList.remove('rec'); }
         });
       }
-      var synth = window.speechSynthesis, speaking = null;
+      // odczyt: naturalny głos Gemini z Workera (/tts), a gdy niedostępny (limit) – najlepszy polski głos przeglądarki
+      var synth = window.speechSynthesis, speaking = null, session = null, player = new Audio();
+      var ttsApi = api.replace(/\/chat$/, '/tts');
+      var SILENT = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA=';
+      // iOS pozwala grać dźwięk tylko po geście – „odblokowujemy” odtwarzacz w chwili kliknięcia
+      function unlock() { try { player.src = SILENT; var p = player.play(); if (p) p.catch(function () {}); } catch (e) {} }
       function plainText(md) {
         return md.replace(/【[^】]*】/g, '').replace(/\[([^\]]+)\]\([^)]*\)/g, '$1').replace(/\(\/[^)\s]*\)/g, '').replace(/https?:\/\/\S+/g, '')
           .replace(/[*#|_]/g, '').replace(/^\s*[-•]\s+/gm, '').replace(/\s+/g, ' ').trim();
       }
-      function stopSpeaking() { if (synth) synth.cancel(); if (speaking) { speaking.classList.remove('on'); speaking.textContent = 'Odsłuchaj'; speaking = null; } }
+      // pierwsza część krótka (szybki start), kolejne dłuższe – Gemini oddaje nagranie dopiero w całości
+      function parts(t) {
+        var sent = t.match(/[^.!?…]+[.!?…]*\s*/g) || [t], out = [], cur = '';
+        sent.forEach(function (x) {
+          x = x.trim(); if (!x) return;
+          var lim = [150, 330, 650][Math.min(out.length, 2)];
+          if (cur && (cur + ' ' + x).length > lim) { out.push(cur); cur = x; } else cur = cur ? cur + ' ' + x : x;
+        });
+        if (cur) out.push(cur);
+        return out.map(function (x) { return x.slice(0, 690); });
+      }
+      function bestVoice() {
+        var score = function (v) { var n = v.name; return (/natural|neural|online/i.test(n) ? 4 : 0) + (/premium|enhanced|ulepsz/i.test(n) ? 3 : 0) + (/google/i.test(n) ? 2 : 0) + (v.localService ? 0 : 1); };
+        return synth.getVoices().filter(function (v) { return /^pl/i.test(v.lang); }).sort(function (a, b) { return score(b) - score(a); })[0];
+      }
+      function setBtn(btn, state) {
+        btn.classList.toggle('on', state !== 'off'); btn.classList.toggle('wait', state === 'wait');
+        btn.textContent = state === 'wait' ? 'Przygotowuję głos…' : state === 'on' ? 'Zatrzymaj' : 'Odsłuchaj';
+      }
+      function stopSpeaking() {
+        session = null;
+        try { player.pause(); } catch (e) {}
+        if (synth) synth.cancel();
+        if (speaking) { setBtn(speaking, 'off'); speaking = null; }
+      }
+      function browserSpeak(text, btn, s) {
+        if (session !== s) return; // w międzyczasie zaczęto czytać coś innego
+        if (!synth) return stopSpeaking();
+        var u = new SpeechSynthesisUtterance(text); u.lang = 'pl-PL'; u.rate = 1.02;
+        var v = bestVoice(); if (v) u.voice = v;
+        u.onend = u.onerror = function () { if (session === s) stopSpeaking(); };
+        setBtn(btn, 'on'); synth.speak(u);
+      }
       function speak(text, btn) {
-        if (!synth) return;
         var again = speaking === btn; stopSpeaking(); if (again) return;
-        var u = new SpeechSynthesisUtterance(plainText(text)); u.lang = 'pl-PL'; u.rate = 1.03;
-        var v = synth.getVoices().filter(function (x) { return /^pl/i.test(x.lang); })[0]; if (v) u.voice = v;
-        u.onend = u.onerror = function () { if (speaking === btn) stopSpeaking(); };
-        speaking = btn; btn.classList.add('on'); btn.textContent = 'Zatrzymaj';
-        synth.speak(u);
+        var s = session = {}, list = parts(plainText(text)), jobs = [];
+        speaking = btn; setBtn(btn, 'wait');
+        function get(i) {
+          if (i >= list.length) return null;
+          return jobs[i] || (jobs[i] = fetch(ttsApi, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text: list[i] }) })
+            .then(function (r) { if (!r.ok) throw new Error('tts'); return r.blob(); }));
+        }
+        get(0); get(1);
+        (function play(i) {
+          if (session !== s) return;
+          if (i >= list.length) return stopSpeaking();
+          get(i).then(function (blob) {
+            if (session !== s) return;
+            get(i + 1); get(i + 2);
+            setBtn(btn, 'on');
+            var url = URL.createObjectURL(blob);
+            player.onended = function () { URL.revokeObjectURL(url); play(i + 1); };
+            player.src = url;
+            var p = player.play(); if (p) p.catch(function () { browserSpeak(list.slice(i).join(' '), btn, s); });
+          }).catch(function () { browserSpeak(list.slice(i).join(' '), btn, s); });
+        })(0);
       }
       function addSpeak(bubble, text, auto) {
-        if (!synth || !text) return;
+        if (!text) return;
         var b = document.createElement('button'); b.type = 'button'; b.className = 'chat-speak'; b.textContent = 'Odsłuchaj';
-        b.addEventListener('click', function () { speak(text, b); });
+        b.addEventListener('click', function () { unlock(); speak(text, b); });
         bubble.parentNode.appendChild(b);
         if (auto) speak(text, b);
       }
@@ -251,7 +303,7 @@ const hints: Hint[] = /^\/wydarzenia\/[^/]+/.test(path)
         if (busy) return;
         clear(); open();
         // iOS odtwarza mowę tylko po geście użytkownika – „odblokowujemy” ją od razu przy kliknięciu
-        if (withVoice && synth) synth.speak(new SpeechSynthesisUtterance(''));
+        if (withVoice) unlock();
         ask('Częstochowa w 60 sekund – podsumuj dzisiejszy dzień w mieście.', { mode: 'brief', label: 'Częstochowa w 60 sekund', speak: withVoice });
       }
 
@@ -413,6 +465,9 @@ const hints: Hint[] = /^\/wydarzenia\/[^/]+/.test(path)
   .chat-speak::before { content: ''; display: inline-block; width: 0; height: 0; margin-right: 6px; border-style: solid; border-width: 5px 0 5px 8px; border-color: transparent transparent transparent currentColor; vertical-align: -1px; }
   .chat-speak.on::before { width: 8px; height: 10px; border: 0; border-inline: 3px solid currentColor; box-sizing: border-box; }
   .chat-speak:hover, .chat-speak.on { background: var(--tone); color: var(--ink); }
+  .chat-speak.wait { animation: chat-wait 1.2s infinite ease-in-out; }
+  .chat-speak.wait::before { display: none; }
+  @keyframes chat-wait { 50% { opacity: 0.55; } }
   .chat-plan { display: grid; gap: 12px; max-width: 100%; width: 100%; }
   .chat-plan-g { display: grid; gap: 6px; }
   .chat-plan-g > span { font-size: 0.8125rem; font-weight: 700; color: var(--ink-soft); }
@@ -451,6 +506,6 @@ const hints: Hint[] = /^\/wydarzenia\/[^/]+/.test(path)
     .chat-panel { animation: none; }
     .chat-log { scroll-behavior: auto; }
     .chat-b.typing i { animation: none; opacity: 0.6; }
-    .chat-mic.rec { animation: none; }
+    .chat-mic.rec, .chat-speak.wait { animation: none; }
   }
 </style>

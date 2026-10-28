@@ -36,8 +36,6 @@ const spark = 'M12 2.5l1.9 5.6 5.6 1.9-5.6 1.9L12 17.5l-1.9-5.6L4.5 10l5.6-1.9zM
     var chat = document.querySelector('[data-chat]');
     if (!box || !chat || chat.hidden || !window.fetch || !window.ReadableStream) return;
     box.hidden = false;
-    // bez syntezy mowy zostaje samo „Przeczytaj”
-    if (!window.speechSynthesis) [].forEach.call(box.querySelectorAll('[data-speak]'), function (b) { b.hidden = true; });
     box.addEventListener('click', function (e) {
       var b = e.target.closest('button[data-ait]');
       if (b) dispatchEvent(new CustomEvent('ck-chat', { detail: { action: b.dataset.ait, speak: !!b.dataset.speak } }));

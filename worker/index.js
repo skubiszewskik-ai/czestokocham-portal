@@ -257,6 +257,69 @@ const call = (p, messages, extra) =>
     body: JSON.stringify({ model: p.model, messages, stream: true, temperature: 0.4, max_tokens: 1500, ...extra }),
   });
 
+// --- Głos: Gemini TTS (naturalny lektor po polsku). Gemini nie oddaje dźwięku kawałkami, więc widget dzieli tekst
+// na części (pierwsze zdanie osobno – szybki start). Nagrania pamiętamy, więc to samo podsumowanie dnia nie zużywa limitu drugi raz.
+const TTS_MODELS = ['gemini-2.5-flash-preview-tts', 'gemini-3.1-flash-tts-preview'];
+const TTS_MAX = 700;
+
+function wav(pcm, rate = 24000) {
+  const h = new DataView(new ArrayBuffer(44));
+  const str = (o, t) => [...t].forEach((c, i) => h.setUint8(o + i, c.charCodeAt(0)));
+  str(0, 'RIFF'); h.setUint32(4, 36 + pcm.length, true); str(8, 'WAVE'); str(12, 'fmt ');
+  h.setUint32(16, 16, true); h.setUint16(20, 1, true); h.setUint16(22, 1, true); h.setUint32(24, rate, true);
+  h.setUint32(28, rate * 2, true); h.setUint16(32, 2, true); h.setUint16(34, 16, true); str(36, 'data'); h.setUint32(40, pcm.length, true);
+  const out = new Uint8Array(44 + pcm.length);
+  out.set(new Uint8Array(h.buffer), 0); out.set(pcm, 44);
+  return out;
+}
+
+async function tts(env, text, ctxWait) {
+  const voice = env.TTS_VOICE || 'Sulafat';
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${voice}|${text}`));
+  const key = new Request(`https://cache.czestokocham.pl/tts/${[...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('')}.wav`);
+  const hit = await caches.default.match(key);
+  if (hit) return hit.arrayBuffer();
+  for (const model of TTS_MODELS) {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-goog-api-key': env.GEMINI_API_KEY },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: `Przeczytaj ciepło i naturalnie, jak lektorka lokalnego radia, w spokojnym tempie:\n${text}` }] }],
+        generationConfig: { responseModalities: ['AUDIO'], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } } } },
+      }),
+    }).catch(() => null);
+    if (!res || !res.ok) { console.log('tts', model, res && res.status); continue; }
+    const data = (await res.json().catch(() => ({})))?.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+    if (!data) continue;
+    const bin = atob(data);
+    const pcm = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) pcm[i] = bin.charCodeAt(i);
+    const audio = wav(pcm);
+    ctxWait.waitUntil(caches.default.put(key, new Response(audio, { headers: { 'content-type': 'audio/wav', 'Cache-Control': 'public, max-age=604800' } })));
+    return audio.buffer;
+  }
+  return null;
+}
+
+// Podsumowanie dnia jest takie samo dla wszystkich – generujemy je raz na godzinę i oddajemy z pamięci
+const briefKey = () => new Request(`https://cache.czestokocham.pl/brief/${iso(new Date())}-${hourPl(new Date())}`);
+const sse = (text) => `data: ${JSON.stringify({ choices: [{ delta: { content: text } }] })}\n\ndata: [DONE]\n\n`;
+async function saveBrief(stream, key) {
+  const rd = stream.getReader(), dec = new TextDecoder();
+  let buf = '', text = '';
+  for (;;) {
+    const { done, value } = await rd.read();
+    if (done) break;
+    buf += dec.decode(value, { stream: true });
+    const lines = buf.split('\n'); buf = lines.pop();
+    for (const l of lines) {
+      if (!l.startsWith('data:')) continue;
+      try { text += JSON.parse(l.slice(5)).choices[0].delta.content || ''; } catch {}
+    }
+  }
+  if (text.length > 200) await caches.default.put(key, new Response(sse(text), { headers: { 'content-type': 'text/event-stream', 'Cache-Control': 'public, max-age=3600' } }));
+}
+
 export default {
   async fetch(req, env, ctx) {
     const h = cors(req);
@@ -264,13 +327,22 @@ export default {
     if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: ch });
     const path = new URL(req.url).pathname;
     if (path === '/' || path === '/health') return json({ ok: true, service: 'czestokocham-czat' }, 200, ch);
-    if (path !== '/chat' || req.method !== 'POST') return json({ error: 'Nie znaleziono.' }, 404, ch);
+    if ((path !== '/chat' && path !== '/tts') || req.method !== 'POST') return json({ error: 'Nie znaleziono.' }, 404, ch);
     if (!ok) return json({ error: 'Niedozwolone źródło.' }, 403, ch);
 
     if (env.LIMITER) {
       const ip = req.headers.get('CF-Connecting-IP') || 'x';
-      const { success } = await env.LIMITER.limit({ key: ip });
+      const { success } = await env.LIMITER.limit({ key: path === '/tts' ? `tts:${ip}` : ip });
       if (!success) return json({ error: 'Za dużo pytań naraz – spróbuj za chwilę.' }, 429, ch);
+    }
+
+    if (path === '/tts') {
+      let t = '';
+      try { t = String((await req.json()).text || '').replace(/\s+/g, ' ').trim(); } catch {}
+      if (!t || t.length > TTS_MAX || !env.GEMINI_API_KEY) return json({ error: 'Błędny tekst.' }, 400, ch);
+      const audio = await tts(env, t, ctx);
+      // brak głosu (np. limit) – widget czyta wtedy głosem przeglądarki
+      return audio ? new Response(audio, { headers: { 'content-type': 'audio/wav', 'cache-control': 'no-store', ...ch } }) : json({ error: 'Głos chwilowo niedostępny.' }, 503, ch);
     }
 
     let body;
@@ -289,12 +361,22 @@ export default {
     const artText = art ? `\n\n${ARTICLE_RULES}\n\nARTYKUŁ: ${art.title}\nAdres: ${art.path}${art.date ? `\nOpublikowano: ${art.date}` : ''}${art.source ? `\n${art.source}` : ''}${art.lead ? `\nLead: ${art.lead}` : ''}\nTreść:\n${art.body}` : '';
     const messages = [{ role: 'system', content: `${SYSTEM}\n\nDATY\n${d.text}${weather ? `\n\n${weather}` : ''}${mode ? `\n\n${MODES[mode]}` : ''}${artText}\n\n${kb}` }, ...msgs];
 
+    const bk = mode === 'brief' && msgs.length === 1 ? briefKey() : null;
+    if (bk) {
+      const hit = await caches.default.match(bk);
+      if (hit) return new Response(hit.body, { headers: { 'content-type': 'text/event-stream; charset=utf-8', 'cache-control': 'no-store', ...ch } });
+    }
+
     const errors = [];
     for (const p of providers(env)) {
       for (const extra of [p.extra, ...(p.plain && JSON.stringify(p.plain) !== JSON.stringify(p.extra) ? [p.plain] : [])]) {
         try {
           const res = await call(p, messages, extra);
-          if (res.ok && res.body) return new Response(res.body, { headers: { 'content-type': 'text/event-stream; charset=utf-8', 'cache-control': 'no-store', ...ch } });
+          if (res.ok && res.body) {
+            let out = res.body;
+            if (bk) { const [a, b] = res.body.tee(); out = a; ctx.waitUntil(saveBrief(b, bk)); }
+            return new Response(out, { headers: { 'content-type': 'text/event-stream; charset=utf-8', 'cache-control': 'no-store', ...ch } });
+          }
           errors.push(`${p.name} ${res.status}`);
           if (res.status === 429) break; // limit dostawcy – od razu zapasowy
         } catch (e) { errors.push(`${p.name} ${e.message}`); break; }

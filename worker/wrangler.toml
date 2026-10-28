@@ -8,6 +8,8 @@ compatibility_date = "2025-10-01"
 SITE = "https://czestokocham.pl"
 GROQ_MODEL = "openai/gpt-oss-120b"
 WEB_SEARCH = "1"
+# głos lektora (Gemini TTS): Sulafat – ciepły, Aoede – lżejszy, Charon – męski
+TTS_VOICE = "Sulafat"
 
 # limit zapytań na adres IP (darmowy binding Cloudflare)
 [[ratelimits]]
