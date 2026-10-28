@@ -84,7 +84,7 @@ function wantedDays(q, d) {
 }
 
 /** Z całej bazy wiedzy wybiera to, co pasuje do pytania (słowa i daty), plus kilka najnowszych – żeby prompt był krótki */
-function pick(ctx, question, d) {
+function pick(ctx, question, d, small = false) {
   const q = new Set(words(question));
   const score = (text) => { let n = 0; for (const w of words(text)) if (q.has(w)) n++; return n; };
   const top = (arr, text, nMatch, nFresh, first = []) => {
@@ -95,8 +95,8 @@ function pick(ctx, question, d) {
   const want = wantedDays(question, d);
   const allEv = ctx.events || [];
   const onDays = want.size ? allEv.filter((e) => (e.d || []).some((x) => want.has(x))).slice(0, 18) : [];
-  const news = top(ctx.news || [], (a) => `${a.t} ${a.l} ${a.c}`, 6, 6).map((a) => `- [${a.t}](${a.u}) (${a.c}, ${a.d}): ${a.l}`);
-  const events = top(allEv, (e) => `${e.t} ${e.y} ${e.p}`, 6, onDays.length ? 4 : 12, onDays).map((e) => `- [${e.t}](${e.u}) – ${e.y}, ${e.p}, ${e.w}`);
+  const news = top(ctx.news || [], (a) => `${a.t} ${a.l} ${a.c}`, small ? 4 : 6, small ? 2 : 6).map((a) => `- [${a.t}](${a.u}) (${a.c}, ${a.d}): ${a.l}`);
+  const events = top(allEv, (e) => `${e.t} ${e.y} ${e.p}`, small ? 2 : 6, small ? 0 : onDays.length ? 4 : 12, small ? onDays.slice(0, 4) : onDays).map((e) => `- [${e.t}](${e.u}) – ${e.y}, ${e.p}, ${e.w}`);
   const note = want.size ? `\n(Pytanie dotyczy dni: ${[...want].join(', ')}. ${onDays.length ? `Wydarzeń w te dni w kalendarzu: ${onDays.length} – są na początku listy.` : 'W kalendarzu nie ma wydarzeń w te dni.'})` : '';
   return `WIEDZA PORTALU (stan na ${ctx.at ? ctx.at.slice(0, 16).replace('T', ' ') : 'nieznany'} UTC)\nWiadomości:\n${news.join('\n') || '(brak)'}\nWydarzenia (od najbliższych):${note}\n${events.join('\n') || '(brak)'}`;
 }
@@ -115,6 +115,48 @@ async function loadContext(env, ctxWait) {
   }
   try { return res && res.ok ? await res.json() : {}; } catch { return {}; }
 }
+
+const ARTICLE_PATH = /^\/(miasto|powiat|kraj|sport)\/[a-z0-9-]{3,160}$/;
+const ARTICLE_MAX = 6000;
+
+/** Treść artykułu prosto ze strony portalu (nie od przeglądarki) – tytuł, lead, data, akapity; pamiętana godzinę */
+async function loadArticle(env, path, ctxWait) {
+  const url = `${env.SITE}${path}`;
+  const key = new Request(`${url}?ai-text`);
+  const cache = caches.default;
+  const hit = await cache.match(key);
+  if (hit) return hit.json();
+  const res = await fetch(url, { cf: { cacheTtl: 600 } }).catch(() => null);
+  if (!res || !res.ok) return null;
+  const parts = { title: '', lead: '', date: '', source: '', body: [] };
+  let cur = null;
+  const grab = (field) => ({
+    element(el) { cur = { field, text: '' }; el.onEndTag(() => { const t = cur.text.replace(/\s+/g, ' ').trim(); if (t) field === 'body' ? parts.body.push(t) : (parts[field] ||= t); cur = null; }); },
+    text(t) { if (cur) cur.text += t.text; },
+  });
+  await new HTMLRewriter()
+    .on('h1.art-t', grab('title'))
+    .on('p.art-lead', grab('lead'))
+    .on('.byline time', grab('date'))
+    .on('.source p', grab('source'))
+    .on('.body p, .body li, .body h2, .body h3, .body blockquote', grab('body'))
+    .transform(res).arrayBuffer();
+  if (!parts.title || !parts.body.length) return null;
+  let body = parts.body.join('\n');
+  if (body.length > ARTICLE_MAX) body = body.slice(0, ARTICLE_MAX) + '…';
+  const art = { path, title: parts.title, lead: parts.lead, date: parts.date, source: parts.source, body };
+  ctxWait.waitUntil(cache.put(key, new Response(JSON.stringify(art), { headers: { 'content-type': 'application/json', 'Cache-Control': 'public, max-age=3600' } })));
+  return art;
+}
+
+const ARTICLE_RULES = `ROZMOWA O ARTYKULE
+Czytelnik pyta o konkretny artykuł z naszego portalu – jego treść jest niżej. Zasady:
+- Fakty o sprawie bierz z artykułu. Nie dopisuj szczegółów, których w nim nie ma (liczb, nazwisk, dat, cytatów).
+- „Streść”: 3 krótkie punkty z najważniejszymi faktami, bez wstępu.
+- „Kontekst” albo „co to oznacza”: wyjaśnij tło z własnej wiedzy lub wyszukiwarki i wyraźnie zaznacz, co jest spoza artykułu („Szerzej: …”). Nie podawaj spekulacji jako faktów.
+- Jeśli odpowiedzi nie ma w tekście, powiedz to wprost i zaproponuj, co można sprawdzić.
+- Nie oceniaj bohaterów tekstu i nie zajmuj stanowiska w sporach politycznych.
+- O tym artykule mów „ten tekst” i nie linkuj do niego. Do innych naszych tekstów z „WIEDZY PORTALU” możesz linkować, gdy są na ten sam temat.`;
 
 // Groq liczy limity na całe konto, osobno dla każdego modelu – przy limicie 120b przechodzimy na 20b (osobna pula), potem Gemini
 function providers(env) {
@@ -168,8 +210,10 @@ export default {
     if (!msgs.length || msgs[msgs.length - 1].role !== 'user') return json({ error: 'Brak pytania.' }, 400, ch);
 
     const d = dates();
-    const kb = pick(await loadContext(env, ctx), msgs.filter((m) => m.role === 'user').slice(-2).map((m) => m.content).join(' '), d);
-    const messages = [{ role: 'system', content: `${SYSTEM}\n\nDATY\n${d.text}\n\n${kb}` }, ...msgs];
+    const art = typeof body.article === 'string' && ARTICLE_PATH.test(body.article) ? await loadArticle(env, body.article, ctx) : null;
+    const kb = pick(await loadContext(env, ctx), msgs.filter((m) => m.role === 'user').slice(-2).map((m) => m.content).join(' '), d, !!art);
+    const artText = art ? `\n\n${ARTICLE_RULES}\n\nARTYKUŁ: ${art.title}\nAdres: ${art.path}${art.date ? `\nOpublikowano: ${art.date}` : ''}${art.source ? `\n${art.source}` : ''}${art.lead ? `\nLead: ${art.lead}` : ''}\nTreść:\n${art.body}` : '';
+    const messages = [{ role: 'system', content: `${SYSTEM}\n\nDATY\n${d.text}${artText}\n\n${kb}` }, ...msgs];
 
     const errors = [];
     for (const p of providers(env)) {

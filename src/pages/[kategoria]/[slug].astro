@@ -7,6 +7,7 @@ import Row from '../../components/Row.astro';
 import Tag from '../../components/Tag.astro';
 import Icon from '../../components/Icon.astro';
 import Gallery from '../../components/Gallery.astro';
+import AskArticle from '../../components/AskArticle.astro';
 import { allArticles, latest, related as getRelated, settings as getSettings, ads as getAds, type Article } from '../../lib/db';
 import { CATEGORIES, SITE, articleUrl, fmtDate, fmtTime, readTime, titleSize } from '../../lib/site';
 
@@ -92,6 +93,8 @@ const creditLabel = credit && (/^(ilustracja|grafika)/i.test(credit) ? credit : 
       <div class="body" set:html={bodyA} />
       {bodyB && <div class="inline-ad"><AdSlot slot="article-inline" ads={ads} settings={settings} /></div>}
       {bodyB && <div class="body" set:html={bodyB} />}
+
+      <AskArticle path={articleUrl(article)} title={article.title} />
 
       {cover && <Gallery images={[cover, ...article.gallery]} credit={creditLabel} title={article.title} />}
 

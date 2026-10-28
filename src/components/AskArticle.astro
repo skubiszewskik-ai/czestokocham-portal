@@ -1,0 +1,77 @@
+---
+// „Zapytaj o ten artykuł” – skróty do Asystenta Częstokocham pod tekstem. Pytanie trafia do czatu (Chat.astro, zdarzenie ck-ask),
+// a Worker sam pobiera treść artykułu ze strony. Bez JavaScriptu albo bez czatu blok się nie pokazuje.
+import { SITE } from '../lib/site';
+interface Props { path: string; title: string }
+const { path, title } = Astro.props;
+const asks = [
+  { label: 'Streść w 3 punktach', q: 'Streść ten tekst w 3 punktach.' },
+  { label: 'Wyjaśnij kontekst', q: 'Wyjaśnij kontekst tej sprawy – skąd się wzięła i dlaczego jest ważna?' },
+  { label: 'Co to zmienia dla mieszkańców?', q: 'Co ta sprawa oznacza dla mieszkańców Częstochowy i okolic?' },
+];
+---
+{SITE.chatApi && (
+  <section class="ask" aria-labelledby="h-ask" data-ask={path} data-ask-title={title} hidden>
+    <div class="ask-top">
+      <span class="ask-ic" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M12 2.5l1.9 5.6 5.6 1.9-5.6 1.9L12 17.5l-1.9-5.6L4.5 10l5.6-1.9zM18.5 15l.9 2.6 2.6.9-2.6.9-.9 2.6-.9-2.6-2.6-.9 2.6-.9z"/></svg></span>
+      <div>
+        <h2 class="ask-h" id="h-ask">Zapytaj o ten artykuł</h2>
+        <p class="ask-p">Nasz asystent AI streści tekst, wyjaśni tło sprawy i odpowie na Twoje pytania.</p>
+      </div>
+    </div>
+    <div class="ask-chips">
+      {asks.map((a) => <button type="button" class="ask-chip" data-q={a.q}>{a.label}</button>)}
+    </div>
+    <form class="ask-form" autocomplete="off">
+      <input type="text" maxlength="500" placeholder="Zadaj własne pytanie o ten tekst…" aria-label="Twoje pytanie o artykuł" />
+      <button type="submit" aria-label="Zapytaj"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+    </form>
+  </section>
+)}
+
+<script is:inline>
+  // czat (Chat.astro) jest na końcu strony – czekamy, aż będzie w dokumencie
+  addEventListener('DOMContentLoaded', function () {
+    var box = document.querySelector('[data-ask]');
+    // tylko gdy czat na stronie działa (ten sam warunek, co w Chat.astro)
+    var chat = document.querySelector('[data-chat]');
+    if (!box || !chat || chat.hidden || !window.fetch || !window.ReadableStream) return;
+    box.hidden = false;
+    function go(q) {
+      q = (q || '').trim();
+      if (!q) return;
+      dispatchEvent(new CustomEvent('ck-ask', { detail: { q: q, path: box.dataset.ask, title: box.dataset.askTitle } }));
+    }
+    box.addEventListener('click', function (e) { var b = e.target.closest('.ask-chip'); if (b) go(b.dataset.q); });
+    var form = box.querySelector('.ask-form'), input = form.querySelector('input');
+    form.addEventListener('submit', function (e) { e.preventDefault(); go(input.value); input.value = ''; });
+  });
+</script>
+
+<style>
+  .ask { margin: 8px 0 40px; padding: clamp(20px, 3vw, 28px); background: var(--navy); color: #fff; border-radius: var(--r-xl); display: grid; gap: 18px; }
+  .ask[hidden] { display: none; }
+  .ask-top { display: flex; gap: 14px; align-items: flex-start; }
+  .ask-ic { flex: none; display: grid; place-items: center; width: 46px; height: 46px; border-radius: 999px; background: var(--red); }
+  .ask-h { font-size: clamp(1.25rem, 1.1rem + 0.5vw, 1.5rem); font-weight: 800; letter-spacing: -0.01em; line-height: 1.2; }
+  .ask-p { margin-top: 4px; color: var(--on-navy-soft); font-size: 1rem; line-height: 1.5; }
+  .ask-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .ask-chip { min-height: 44px; padding: 0 18px; border: 0; border-radius: 999px; background: rgb(255 255 255 / 0.1); color: #fff; font: inherit; font-weight: 650; font-size: 0.95rem; cursor: pointer; transition: background-color 0.2s, color 0.2s, transform 0.2s var(--ease); }
+  .ask-chip:hover { background: #fff; color: var(--ink); }
+  .ask-chip:active { transform: scale(0.97); }
+  .ask-form { display: flex; gap: 8px; }
+  .ask-form input { flex: 1; min-width: 0; min-height: 48px; padding: 0 18px; border: 0; border-radius: 999px; background: #fff; color: var(--ink); font: inherit; font-size: 1rem; }
+  .ask-form input::placeholder { color: var(--ink-soft); }
+  .ask-form input:focus-visible { outline: 3px solid var(--red); outline-offset: 2px; }
+  .ask-form button { flex: none; display: grid; place-items: center; width: 48px; height: 48px; border: 0; border-radius: 999px; background: var(--red); color: #fff; cursor: pointer; transition: background-color 0.2s, transform 0.2s var(--ease); }
+  .ask-form button:hover { background: var(--red-dark); }
+  .ask-form button:active { transform: scale(0.94); }
+  .ask-chip:focus-visible, .ask-form button:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+  @media (max-width: 760px) {
+    .ask { margin-inline: calc(var(--m) * -0.25); }
+    .ask-chip { flex: 1 1 auto; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .ask-chip, .ask-form button { transition: none; }
+  }
+</style>
