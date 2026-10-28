@@ -2,8 +2,34 @@
 // Asystent Częstokocham: czat z AI. Strona jest statyczna, więc pytania idą do Workera Cloudflare (worker/index.js),
 // który trzyma klucze i dokłada wiedzę portalu (/kontekst.json). Bez SITE.chatApi czat się nie pokazuje.
 import { SITE } from '../lib/site';
+interface Props { path?: string }
+const { path = '/' } = Astro.props;
 const api = SITE.chatApi;
-const hints = ['Co robić w weekend w Częstochowie?', 'Jakie są dziś wydarzenia?', 'Co nowego w mieście?', 'Opowiedz o Jasnej Górze'];
+
+// podpowiedzi zależne od strony: action „brief” = Częstochowa w 60 sekund, „plan” = planer dnia,
+// „page” = pytanie o artykuł lub wydarzenie, na którego stronie jest czytelnik
+type Hint = { label: string; q?: string; action?: 'brief' | 'plan' | 'page' };
+const brief: Hint = { label: 'Częstochowa w 60 sekund', action: 'brief' };
+const plan: Hint = { label: 'Zaplanuj mi dzień', action: 'plan' };
+const hints: Hint[] = /^\/wydarzenia\/[^/]+/.test(path)
+  ? [
+      { label: 'Jak tam dojechać?', q: 'Jak dojechać na to wydarzenie, np. komunikacją miejską?', action: 'page' },
+      { label: 'Co zjeść w pobliżu?', q: 'Gdzie w pobliżu tego miejsca można coś zjeść albo usiąść na kawę?', action: 'page' },
+      { label: 'Co jeszcze tego dnia?', q: 'Co jeszcze dzieje się w Częstochowie tego dnia?', action: 'page' },
+      plan,
+    ]
+  : /^\/(miasto|powiat|kraj|sport)\/[^/]+/.test(path)
+    ? [
+        { label: 'Streść ten artykuł', q: 'Streść ten tekst w 3 punktach.', action: 'page' },
+        { label: 'Wyjaśnij kontekst', q: 'Wyjaśnij kontekst tej sprawy – skąd się wzięła i dlaczego jest ważna?', action: 'page' },
+        brief,
+        { label: 'Co nowego w mieście?' },
+      ]
+    : path.startsWith('/wydarzenia')
+      ? [plan, { label: 'Co w ten weekend?' }, { label: 'Coś dla dzieci?', q: 'Jakie wydarzenia dla dzieci są w najbliższych dniach?' }, { label: 'Koncerty w tym tygodniu', q: 'Jakie koncerty są w tym tygodniu?' }]
+      : path.startsWith('/sport')
+        ? [{ label: 'Kiedy gra Raków?', q: 'Kiedy najbliższy mecz Rakowa Częstochowa?' }, { label: 'Co we Włókniarzu?', q: 'Co nowego we Włókniarzu Częstochowa?' }, brief, { label: 'Sport w weekend', q: 'Jakie wydarzenia sportowe są w ten weekend w Częstochowie?' }]
+        : [brief, plan, { label: 'Co dziś w mieście?', q: 'Jakie są dziś wydarzenia?' }, { label: 'Jaka będzie pogoda?', q: 'Jaka będzie pogoda w najbliższych dniach?' }, { label: 'Opowiedz o Jasnej Górze' }];
 ---
 {api && (
   <div class="chat" data-chat={api}>
@@ -19,17 +45,18 @@ const hints = ['Co robić w weekend w Częstochowie?', 'Jakie są dziś wydarzen
       </header>
       <div class="chat-about" data-chat-about hidden>
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h5"/></svg>
-        <p>Rozmowa o artykule: <strong data-chat-about-t></strong></p>
-        <button type="button" aria-label="Zakończ rozmowę o artykule" title="Zakończ rozmowę o artykule" data-chat-about-x><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+        <p><span data-chat-about-l>Rozmowa o artykule:</span> <strong data-chat-about-t></strong></p>
+        <button type="button" aria-label="Zakończ rozmowę o tej stronie" title="Zakończ rozmowę o tej stronie" data-chat-about-x><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
       </div>
       <div class="chat-log" role="log" aria-live="polite" aria-relevant="additions text" data-chat-log>
         <div class="chat-msg bot"><div class="chat-b">Cześć! Jestem asystentem Częstokocham. Znam najnowsze wiadomości i wydarzenia z Częstochowy, a o resztę zapytam internet. W czym pomóc?</div></div>
         <div class="chat-hints" data-chat-hints>
-          {hints.map((h) => <button type="button" class="chat-hint">{h}</button>)}
+          {hints.map((h) => <button type="button" class={`chat-hint${h.action === 'brief' || h.action === 'plan' ? ' star' : ''}`} data-q={h.q || h.label} data-action={h.action}>{h.label}</button>)}
         </div>
       </div>
       <form class="chat-form" data-chat-form autocomplete="off">
         <textarea rows="1" maxlength="1000" placeholder="Zadaj pytanie…" aria-label="Twoje pytanie" data-chat-input></textarea>
+        <button class="chat-mic" type="button" aria-label="Zadaj pytanie głosem" title="Zadaj pytanie głosem" aria-pressed="false" data-chat-mic hidden><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
         <button class="chat-send" type="submit" aria-label="Wyślij" data-chat-send><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
       </form>
       <p class="chat-note">Odpowiada sztuczna inteligencja i może się mylić. Ważne informacje sprawdź w źródle.</p>
@@ -123,21 +150,24 @@ const hints = ['Co robić w weekend w Częstochowie?', 'Jakie są dziś wydarzen
         m.appendChild(b); log.appendChild(m); log.scrollTop = log.scrollHeight;
         return b;
       }
-      var resetBtn = root.querySelector('[data-chat-reset]'), aboutBar = root.querySelector('[data-chat-about]');
+      var pending = [], resetBtn = root.querySelector('[data-chat-reset]'), aboutBar = root.querySelector('[data-chat-about]');
       // rozmowa o konkretnym artykule (blok „Zapytaj o ten artykuł”) – Worker sam pobiera jego treść ze strony
       function setAbout(a) {
         about = a; aboutBar.hidden = !a;
         aboutBar.querySelector('[data-chat-about-t]').textContent = a ? a.title : '';
-        input.placeholder = a ? 'Zapytaj o ten artykuł…' : 'Zadaj pytanie…';
+        var ev = a && a.path.indexOf('/wydarzenia/') === 0;
+        aboutBar.querySelector('[data-chat-about-l]').textContent = ev ? 'Rozmowa o wydarzeniu:' : 'Rozmowa o artykule:';
+        input.placeholder = a ? (ev ? 'Zapytaj o to wydarzenie…' : 'Zapytaj o ten artykuł…') : 'Zadaj pytanie…';
         if (hints) hints.hidden = !!(a || history.length);
       }
       function clear() {
         if (ctrl) ctrl.abort();
+        if (window.speechSynthesis) speechSynthesis.cancel();
         history = []; try { sessionStorage.removeItem(KEY); } catch (e) {}
         [].forEach.call(log.querySelectorAll('.chat-msg'), function (m, i) { if (i) m.remove(); });
         resetBtn.hidden = true; setAbout(null);
       }
-      history.forEach(function (m) { add(m.role, m.content); });
+      history.forEach(function (m) { var b = add(m.role, m.label || m.content); if (m.role === 'assistant') pending.push([b, m.content]); });
       if (history.length) resetBtn.hidden = false;
       setAbout(about);
       resetBtn.addEventListener('click', function () { clear(); input.focus(); });
@@ -162,23 +192,125 @@ const hints = ['Co robić w weekend w Częstochowie?', 'Jakie są dziś wydarzen
       fab.addEventListener('click', function () { panel.hidden ? open() : close(); });
       root.querySelector('[data-chat-close]').addEventListener('click', close);
       addEventListener('keydown', function (e) { if (e.key === 'Escape' && !panel.hidden) close(); });
-      if (hints) hints.addEventListener('click', function (e) { var b = e.target.closest('.chat-hint'); if (b) ask(b.textContent); });
+      if (hints) hints.addEventListener('click', function (e) {
+        var b = e.target.closest('.chat-hint');
+        if (!b) return;
+        var a = b.dataset.action;
+        if (a === 'brief') return startBrief(false);
+        if (a === 'plan') return startPlan();
+        if (a === 'page') {
+          var h1 = document.querySelector('h1');
+          setAbout({ path: location.pathname.replace(/\/$/, ''), title: h1 ? h1.textContent.trim() : document.title });
+        }
+        ask(b.dataset.q, { label: b.textContent });
+      });
+
+      // --- głos: pytanie mikrofonem (rozpoznawanie mowy przeglądarki) i odczyt odpowiedzi na głos ---
+      var SR = window.SpeechRecognition || window.webkitSpeechRecognition, mic = root.querySelector('[data-chat-mic]'), rec = null;
+      if (SR && mic) {
+        mic.hidden = false;
+        mic.addEventListener('click', function () {
+          if (rec) { rec.stop(); return; }
+          rec = new SR(); rec.lang = 'pl-PL'; rec.interimResults = true; rec.maxAlternatives = 1;
+          var before = input.value;
+          rec.onresult = function (e) {
+            var t = ''; for (var i = 0; i < e.results.length; i++) t += e.results[i][0].transcript;
+            input.value = (before ? before + ' ' : '') + t; grow();
+          };
+          rec.onend = function () { rec = null; mic.setAttribute('aria-pressed', 'false'); mic.classList.remove('rec'); if (input.value.trim() && input.value !== before) form.requestSubmit(); };
+          rec.onerror = function () { mic.classList.remove('rec'); };
+          mic.setAttribute('aria-pressed', 'true'); mic.classList.add('rec');
+          try { rec.start(); } catch (e) { rec = null; mic.classList.remove('rec'); }
+        });
+      }
+      var synth = window.speechSynthesis, speaking = null;
+      function plainText(md) {
+        return md.replace(/【[^】]*】/g, '').replace(/\[([^\]]+)\]\([^)]*\)/g, '$1').replace(/\(\/[^)\s]*\)/g, '').replace(/https?:\/\/\S+/g, '')
+          .replace(/[*#|_]/g, '').replace(/^\s*[-•]\s+/gm, '').replace(/\s+/g, ' ').trim();
+      }
+      function stopSpeaking() { if (synth) synth.cancel(); if (speaking) { speaking.classList.remove('on'); speaking.textContent = 'Odsłuchaj'; speaking = null; } }
+      function speak(text, btn) {
+        if (!synth) return;
+        var again = speaking === btn; stopSpeaking(); if (again) return;
+        var u = new SpeechSynthesisUtterance(plainText(text)); u.lang = 'pl-PL'; u.rate = 1.03;
+        var v = synth.getVoices().filter(function (x) { return /^pl/i.test(x.lang); })[0]; if (v) u.voice = v;
+        u.onend = u.onerror = function () { if (speaking === btn) stopSpeaking(); };
+        speaking = btn; btn.classList.add('on'); btn.textContent = 'Zatrzymaj';
+        synth.speak(u);
+      }
+      function addSpeak(bubble, text, auto) {
+        if (!synth || !text) return;
+        var b = document.createElement('button'); b.type = 'button'; b.className = 'chat-speak'; b.textContent = 'Odsłuchaj';
+        b.addEventListener('click', function () { speak(text, b); });
+        bubble.parentNode.appendChild(b);
+        if (auto) speak(text, b);
+      }
+
+      // --- Częstochowa w 60 sekund: podsumowanie dnia (pogoda, wiadomości, wieczór) ---
+      function startBrief(withVoice) {
+        if (busy) return;
+        clear(); open();
+        // iOS odtwarza mowę tylko po geście użytkownika – „odblokowujemy” ją od razu przy kliknięciu
+        if (withVoice && synth) synth.speak(new SpeechSynthesisUtterance(''));
+        ask('Częstochowa w 60 sekund – podsumuj dzisiejszy dzień w mieście.', { mode: 'brief', label: 'Częstochowa w 60 sekund', speak: withVoice });
+      }
+
+      // --- planer dnia: krótki formularz w czacie, potem plan z kalendarza i pogody ---
+      function startPlan() {
+        if (busy) return;
+        clear(); open();
+        var days = ['Dziś', 'Jutro', 'W sobotę', 'W niedzielę'];
+        var groups = [
+          ['Kiedy', days],
+          ['Z kim', ['Sam / sama', 'We dwoje', 'Z dziećmi', 'Ze znajomymi']],
+          ['Klimat', ['Kultura', 'Aktywnie', 'Na spokojnie', 'Jedzenie i kawa']],
+          ['Budżet', ['Za darmo', 'Do 50 zł', 'Bez limitu']],
+        ];
+        var m = document.createElement('div'); m.className = 'chat-msg bot';
+        var html = '<form class="chat-b chat-plan"><p>Ułożę Ci plan dnia w Częstochowie z wydarzeniami z naszego kalendarza i prognozą pogody. Wybierz:</p>';
+        groups.forEach(function (g, gi) {
+          html += '<div class="chat-plan-g" role="radiogroup" aria-label="' + g[0] + '"><span>' + g[0] + '</span><div>';
+          g[1].forEach(function (o, oi) { html += '<button type="button" role="radio" aria-checked="' + (oi === 0) + '" data-g="' + gi + '">' + o + '</button>'; });
+          html += '</div></div>';
+        });
+        m.innerHTML = html + '<button type="submit" class="chat-plan-go">Ułóż plan</button></form>';
+        if (hints) hints.hidden = true;
+        log.appendChild(m); log.scrollTop = 0;
+        var f = m.querySelector('form');
+        f.addEventListener('click', function (e) {
+          var b = e.target.closest('[role=radio]'); if (!b) return;
+          [].forEach.call(f.querySelectorAll('[data-g="' + b.dataset.g + '"]'), function (x) { x.setAttribute('aria-checked', String(x === b)); });
+        });
+        f.addEventListener('submit', function (e) {
+          e.preventDefault();
+          var pick = groups.map(function (g, gi) { return f.querySelector('[data-g="' + gi + '"][aria-checked="true"]').textContent; });
+          ask('Zaplanuj mi dzień w Częstochowie. Kiedy: ' + pick[0].toLowerCase() + '. Z kim: ' + pick[1].toLowerCase() + '. Klimat: ' + pick[2].toLowerCase() + '. Budżet: ' + pick[3].toLowerCase() + '.',
+            { mode: 'plan', label: 'Plan dnia: ' + pick.join(', ').toLowerCase() });
+        });
+      }
+      pending.forEach(function (x) { addSpeak(x[0], x[1]); });
+      addEventListener('ck-chat', function (e) {
+        var d = e.detail || {};
+        if (d.action === 'brief') startBrief(!!d.speak);
+        else if (d.action === 'plan') startPlan();
+      });
 
       function grow() { input.style.height = ''; if (input.value) input.style.height = Math.min(input.scrollHeight, 120) + 'px'; }
       input.addEventListener('input', grow);
       input.addEventListener('keydown', function (e) { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); form.requestSubmit(); } });
       form.addEventListener('submit', function (e) { e.preventDefault(); ask(input.value); });
 
-      function ask(q) {
+      function ask(q, opts) {
+        opts = opts || {};
         q = (q || '').trim();
         if (!q || busy) return;
-        busy = true; send.disabled = true; input.value = ''; grow();
+        busy = true; send.disabled = true; input.value = ''; grow(); stopSpeaking();
         if (hints) hints.hidden = true;
-        add('user', q); history.push({ role: 'user', content: q }); resetBtn.hidden = false;
+        add('user', opts.label || q); history.push({ role: 'user', content: q, label: opts.label }); resetBtn.hidden = false;
         var bubble = add('bot', ''); bubble.classList.add('typing'); bubble.innerHTML = '<i></i><i></i><i></i>';
         var text = '';
         ctrl = new AbortController();
-        fetch(api, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ messages: forAi(), article: about ? about.path : undefined }), signal: ctrl.signal })
+        fetch(api, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ messages: forAi(), article: about ? about.path : undefined, mode: opts.mode }), signal: ctrl.signal })
           .then(function (res) {
             if (!res.ok) return res.json().catch(function () { return {}; }).then(function (j) { throw new Error(j.error || 'Coś poszło nie tak. Spróbuj ponownie.'); });
             var rd = res.body.getReader(), dec = new TextDecoder(), buf = '';
@@ -205,6 +337,7 @@ const hints = ['Co robić w weekend w Częstochowie?', 'Jakie są dziś wydarzen
           .then(function () {
             if (!text) throw new Error('Nie udało się wygenerować odpowiedzi. Spróbuj inaczej sformułować pytanie.');
             history.push({ role: 'assistant', content: text }); save();
+            addSpeak(bubble, text, opts.speak);
           })
           .catch(function (err) {
             history.pop(); save();
@@ -273,6 +406,28 @@ const hints = ['Co robić w weekend w Częstochowie?', 'Jakie są dziś wydarzen
   .chat-hint { padding: 9px 14px; border: 0; border-radius: 999px; background: #fff; color: var(--ink); font: inherit; font-size: 0.9rem; font-weight: 600; cursor: pointer; text-align: left; transition: background-color 0.2s, color 0.2s, transform 0.2s var(--ease); }
   .chat-hint:hover { background: var(--ink); color: #fff; }
   .chat-hint:active { transform: scale(0.97); }
+  .chat-hint.star { background: var(--red); color: #fff; }
+  .chat-hint.star:hover { background: var(--red-dark); }
+  .chat-msg.bot { flex-direction: column; align-items: flex-start; gap: 4px; }
+  .chat-speak { margin-left: 6px; padding: 4px 10px; border: 0; border-radius: 999px; background: transparent; color: var(--ink-soft); font: inherit; font-size: 0.8125rem; font-weight: 650; cursor: pointer; transition: background-color 0.2s, color 0.2s; }
+  .chat-speak::before { content: ''; display: inline-block; width: 0; height: 0; margin-right: 6px; border-style: solid; border-width: 5px 0 5px 8px; border-color: transparent transparent transparent currentColor; vertical-align: -1px; }
+  .chat-speak.on::before { width: 8px; height: 10px; border: 0; border-inline: 3px solid currentColor; box-sizing: border-box; }
+  .chat-speak:hover, .chat-speak.on { background: var(--tone); color: var(--ink); }
+  .chat-plan { display: grid; gap: 12px; max-width: 100%; width: 100%; }
+  .chat-plan-g { display: grid; gap: 6px; }
+  .chat-plan-g > span { font-size: 0.8125rem; font-weight: 700; color: var(--ink-soft); }
+  .chat-plan-g > div { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chat-plan-g button { padding: 7px 12px; border: 0; border-radius: 999px; background: var(--tone); color: var(--ink); font: inherit; font-size: 0.875rem; font-weight: 600; cursor: pointer; transition: background-color 0.2s, color 0.2s; }
+  .chat-plan-g button:hover { background: var(--tone-2); }
+  .chat-plan-g button[aria-checked='true'] { background: var(--ink); color: #fff; }
+  .chat-plan-go { justify-self: start; min-height: 44px; padding: 0 20px; border: 0; border-radius: 999px; background: var(--red); color: #fff; font: inherit; font-weight: 700; cursor: pointer; transition: background-color 0.2s, transform 0.2s var(--ease); }
+  .chat-plan-go:hover { background: var(--red-dark); }
+  .chat-plan-go:active { transform: scale(0.97); }
+  .chat-mic { flex: none; display: grid; place-items: center; width: 46px; height: 46px; border: 0; border-radius: 999px; background: #fff; color: var(--ink); cursor: pointer; transition: background-color 0.2s, color 0.2s; }
+  .chat-mic[hidden] { display: none; }
+  .chat-mic:hover { background: var(--tone-2); }
+  .chat-mic.rec { background: var(--red-soft); color: var(--red); animation: chat-rec 1.2s infinite ease-in-out; }
+  @keyframes chat-rec { 50% { transform: scale(1.08); } }
   .chat-form { display: flex; align-items: flex-end; gap: 8px; padding: 10px 12px 6px; background: var(--paper); }
   .chat-form textarea { flex: 1; resize: none; min-height: 46px; max-height: 120px; padding: 12px 16px; border: 0; border-radius: 23px; background: #fff; color: var(--ink); font: inherit; font-size: 1rem; line-height: 1.4; outline: 2px solid transparent; transition: outline-color 0.2s; }
   .chat-form textarea:focus-visible { outline-color: var(--ink); }
@@ -296,5 +451,6 @@ const hints = ['Co robić w weekend w Częstochowie?', 'Jakie są dziś wydarzen
     .chat-panel { animation: none; }
     .chat-log { scroll-behavior: auto; }
     .chat-b.typing i { animation: none; opacity: 0.6; }
+    .chat-mic.rec { animation: none; }
   }
 </style>

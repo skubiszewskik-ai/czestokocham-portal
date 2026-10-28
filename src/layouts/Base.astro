@@ -73,7 +73,7 @@ const adsense = settings.adsenseEnabled && settings.adsenseClient ? settings.ads
         </div>
       </div>
     )}
-    {!noindex && <Chat />}
+    {!noindex && <Chat path={Astro.url.pathname} />}
     <button class="to-top" type="button" aria-label="Przewiń do góry" data-top><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
     <script is:inline define:vars={{ adsense, ga: settings.analyticsId || '' }}>
       (function () {

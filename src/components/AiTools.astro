@@ -1,0 +1,69 @@
+---
+// Wejścia do narzędzi Asystenta Częstokocham: „Częstochowa w 60 sekund” (podsumowanie dnia, także na głos) i planer dnia.
+// Otwierają czat (Chat.astro, zdarzenie ck-chat). Bez JavaScriptu albo bez czatu blok się nie pokazuje.
+import { SITE } from '../lib/site';
+interface Props { only?: 'plan' }
+const { only } = Astro.props;
+const spark = 'M12 2.5l1.9 5.6 5.6 1.9-5.6 1.9L12 17.5l-1.9-5.6L4.5 10l5.6-1.9zM18.5 15l.9 2.6 2.6.9-2.6.9-.9 2.6-.9-2.6-2.6-.9 2.6-.9z';
+---
+{SITE.chatApi && (
+  <section class={`wrap ait${only ? ' one' : ''}`} aria-label="Narzędzia asystenta AI" data-ait hidden>
+    {!only && (
+      <div class="ait-card brief">
+        <h2 class="ait-h">Częstochowa w 60 sekund</h2>
+        <p class="ait-p">Pogoda, najważniejsze wiadomości i co wieczorem w mieście. Podsumowanie dnia od naszego asystenta AI – do przeczytania albo posłuchania.</p>
+        <div class="ait-b">
+          <button type="button" class="btn red" data-ait="brief" data-speak="1"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13l11-6.5z"/></svg> Posłuchaj</button>
+          <button type="button" class="btn white" data-ait="brief">Przeczytaj</button>
+        </div>
+      </div>
+    )}
+    <div class="ait-card plan">
+      <span class="ait-ic" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d={spark} /></svg></span>
+      <div>
+        <h2 class="ait-h">Zaplanuj mi dzień</h2>
+        <p class="ait-p">Wybierz kiedy, z kim i za ile – asystent ułoży plan z wydarzeniami z naszego kalendarza i prognozą pogody.</p>
+      </div>
+      <button type="button" class="btn" data-ait="plan">Ułóż plan</button>
+    </div>
+  </section>
+)}
+
+<script is:inline>
+  // czat (Chat.astro) jest na końcu strony – czekamy, aż będzie w dokumencie
+  addEventListener('DOMContentLoaded', function () {
+    var box = document.querySelector('[data-ait]');
+    var chat = document.querySelector('[data-chat]');
+    if (!box || !chat || chat.hidden || !window.fetch || !window.ReadableStream) return;
+    box.hidden = false;
+    // bez syntezy mowy zostaje samo „Przeczytaj”
+    if (!window.speechSynthesis) [].forEach.call(box.querySelectorAll('[data-speak]'), function (b) { b.hidden = true; });
+    box.addEventListener('click', function (e) {
+      var b = e.target.closest('button[data-ait]');
+      if (b) dispatchEvent(new CustomEvent('ck-chat', { detail: { action: b.dataset.ait, speak: !!b.dataset.speak } }));
+    });
+  });
+</script>
+
+<style>
+  .ait { display: grid; grid-template-columns: 1.15fr 1fr; gap: var(--gap); margin-top: var(--gap); }
+  .ait[hidden] { display: none; }
+  .ait.one { grid-template-columns: 1fr; margin-top: 8px; }
+  .ait-card { border-radius: var(--r-xl); padding: clamp(22px, 3vw, 32px); display: grid; gap: 14px; align-content: start; }
+  .ait-card.brief { background: var(--navy); color: #fff; }
+  .ait-card.brief .ait-p { color: var(--on-navy-soft); }
+  .ait-card.plan { background: var(--red-soft); color: var(--ink); grid-template-columns: auto 1fr; align-items: start; }
+  .ait-card.plan .btn { grid-column: 2; justify-self: start; }
+  .ait.one .ait-card.plan { grid-template-columns: auto 1fr auto; align-items: center; }
+  .ait.one .ait-card.plan .btn { grid-column: auto; }
+  .ait-ic { display: grid; place-items: center; width: 46px; height: 46px; border-radius: 999px; background: var(--red); color: #fff; }
+  .ait-h { font-size: clamp(1.4rem, 1.1rem + 1vw, 2rem); font-weight: 800; letter-spacing: -0.02em; line-height: 1.1; }
+  .ait-p { margin-top: 6px; font-size: 1rem; line-height: 1.5; color: var(--ink-2); max-width: 52ch; }
+  .ait-b { display: flex; flex-wrap: wrap; gap: 10px; }
+  .ait-b [hidden] { display: none; }
+  @media (max-width: 900px) {
+    .ait { grid-template-columns: 1fr; }
+    .ait.one .ait-card.plan { grid-template-columns: auto 1fr; }
+    .ait.one .ait-card.plan .btn { grid-column: 2; }
+  }
+</style>

@@ -8,6 +8,7 @@ import EventCard from '../../components/EventCard.astro';
 import { settings as getSettings, ads as getAds } from '../../lib/db';
 import { EVENTS } from '../../lib/site';
 import { upcoming, ongoing, eventTypes, eventUrl, dayLabel, dayNum, monthShort, type Occurrence } from '../../lib/events';
+import AiTools from '../../components/AiTools.astro';
 
 const settings = getSettings();
 const ads = getAds();
@@ -42,6 +43,8 @@ const jsonld = {
       </div>
     )}
   </section>
+
+  <AiTools only="plan" />
 
   {long.length > 0 && (
     <div class="wrap section ev-long" data-long>

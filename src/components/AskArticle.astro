@@ -2,28 +2,40 @@
 // „Zapytaj o ten artykuł” – skróty do Asystenta Częstokocham pod tekstem. Pytanie trafia do czatu (Chat.astro, zdarzenie ck-ask),
 // a Worker sam pobiera treść artykułu ze strony. Bez JavaScriptu albo bez czatu blok się nie pokazuje.
 import { SITE } from '../lib/site';
-interface Props { path: string; title: string }
-const { path, title } = Astro.props;
-const asks = [
-  { label: 'Streść w 3 punktach', q: 'Streść ten tekst w 3 punktach.' },
-  { label: 'Wyjaśnij kontekst', q: 'Wyjaśnij kontekst tej sprawy – skąd się wzięła i dlaczego jest ważna?' },
-  { label: 'Co to zmienia dla mieszkańców?', q: 'Co ta sprawa oznacza dla mieszkańców Częstochowy i okolic?' },
-];
+type Ask = { label: string; q: string };
+interface Props { path: string; title: string; event?: boolean }
+const { path, title, event = false } = Astro.props;
+// ten sam blok na stronie wydarzenia – pytania praktyczne zamiast streszczenia
+const asks: Ask[] = event
+  ? [
+      { label: 'Jak tam dojechać?', q: 'Jak dojechać na to wydarzenie, np. komunikacją miejską?' },
+      { label: 'Co zjeść w pobliżu?', q: 'Gdzie w pobliżu tego miejsca można coś zjeść albo usiąść na kawę?' },
+      { label: 'Co jeszcze tego dnia?', q: 'Co jeszcze dzieje się w Częstochowie tego dnia?' },
+    ]
+  : [
+      { label: 'Streść w 3 punktach', q: 'Streść ten tekst w 3 punktach.' },
+      { label: 'Wyjaśnij kontekst', q: 'Wyjaśnij kontekst tej sprawy – skąd się wzięła i dlaczego jest ważna?' },
+      { label: 'Co to zmienia dla mieszkańców?', q: 'Co ta sprawa oznacza dla mieszkańców Częstochowy i okolic?' },
+    ];
+const heading = event ? 'Zapytaj o to wydarzenie' : 'Zapytaj o ten artykuł';
+const text = event
+  ? 'Nasz asystent AI podpowie, jak dojechać, co zjeść w pobliżu i co jeszcze dzieje się tego dnia.'
+  : 'Nasz asystent AI streści tekst, wyjaśni tło sprawy i odpowie na Twoje pytania.';
 ---
 {SITE.chatApi && (
   <section class="ask" aria-labelledby="h-ask" data-ask={path} data-ask-title={title} hidden>
     <div class="ask-top">
       <span class="ask-ic" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M12 2.5l1.9 5.6 5.6 1.9-5.6 1.9L12 17.5l-1.9-5.6L4.5 10l5.6-1.9zM18.5 15l.9 2.6 2.6.9-2.6.9-.9 2.6-.9-2.6-2.6-.9 2.6-.9z"/></svg></span>
       <div>
-        <h2 class="ask-h" id="h-ask">Zapytaj o ten artykuł</h2>
-        <p class="ask-p">Nasz asystent AI streści tekst, wyjaśni tło sprawy i odpowie na Twoje pytania.</p>
+        <h2 class="ask-h" id="h-ask">{heading}</h2>
+        <p class="ask-p">{text}</p>
       </div>
     </div>
     <div class="ask-chips">
       {asks.map((a) => <button type="button" class="ask-chip" data-q={a.q}>{a.label}</button>)}
     </div>
     <form class="ask-form" autocomplete="off">
-      <input type="text" maxlength="500" placeholder="Zadaj własne pytanie o ten tekst…" aria-label="Twoje pytanie o artykuł" />
+      <input type="text" maxlength="500" placeholder={event ? 'Zadaj własne pytanie o to wydarzenie…' : 'Zadaj własne pytanie o ten tekst…'} aria-label={event ? 'Twoje pytanie o wydarzenie' : 'Twoje pytanie o artykuł'} />
       <button type="submit" aria-label="Zapytaj"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
     </form>
   </section>

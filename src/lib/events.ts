@@ -35,7 +35,7 @@ const ALL: CityEvent[] = Object.values<any>(raw.events || {})
     slug: x.slug, title: x.title, lead: x.lead || '', body: x.body || '', type: x.type || 'Wydarzenie',
     place: x.place || '', address: x.address || null, dates: x.dates || [], cover: x.cover || null,
     photoCredit: x.photoCredit || 'cgk.czestochowa.pl', tickets: x.tickets || null, price: x.price || null,
-    organizer: x.organizer || null, source: x.source, ready: !!x.ai && !!x.body,
+    organizer: x.organizer && x.organizer !== 'null' ? x.organizer : null, source: x.source, ready: !!x.ai && !!x.body,
   }))
   .filter((e) => e.dates.some((d: EventDate) => d.day >= today()));
 

@@ -47,5 +47,8 @@ const { title, href, linkText = 'Zobacz wszystkie', id, dark = false } = Astro.p
     .car-track { grid-auto-columns: 74%; margin-inline: calc(var(--m) * -1); padding-inline: var(--m); scroll-padding-inline: var(--m); }
     .car-btn { display: none; }
     .car-ctrl .more-link { margin-right: 0; }
+    /* długi tytuł i link „Zobacz wszystkie” nie mieszczą się w jednej linii na telefonie – strona wylewała się w bok */
+    .car-head { flex-wrap: wrap; gap: 6px 16px; }
+    .car-head .head { white-space: normal; }
   }
 </style>

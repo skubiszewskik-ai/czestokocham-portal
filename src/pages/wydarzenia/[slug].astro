@@ -7,6 +7,7 @@ import EventCard from '../../components/EventCard.astro';
 import { settings as getSettings, ads as getAds } from '../../lib/db';
 import { EVENTS, SITE } from '../../lib/site';
 import { allEvents, next, today, dayLabel, whenText, untilText, isOngoing, type CityEvent } from '../../lib/events';
+import AskArticle from '../../components/AskArticle.astro';
 
 export function getStaticPaths() {
   return allEvents().filter((e) => e.ready).map((e) => ({ params: { slug: e.slug }, props: { e } }));
@@ -86,6 +87,8 @@ const jsonld = (long ? [dates[0]] : dates.slice(0, 10)).map((d) => ({
 
       <div class="body" set:html={e.body} />
       {e.organizer && <p class="org"><strong>Organizator:</strong> {e.organizer}</p>}
+
+      <AskArticle path={`/wydarzenia/${e.slug}`} title={e.title} event />
 
       <aside class="source">
         <span class="src-ic"><Icon name="source" /></span>

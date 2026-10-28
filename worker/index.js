@@ -15,7 +15,7 @@ const SYSTEM = `Jesteś Asystentem Częstokocham – przewodnikiem po Częstocho
 
 SKĄD BIERZESZ WIEDZĘ (w tej kolejności)
 1. „WIEDZA PORTALU” na końcu – nasze artykuły i kalendarz wydarzeń. To główne źródło: jeśli coś tam jest, odpowiadaj na tej podstawie.
-2. Wyszukiwarka internetowa – do rzeczy zmiennych (pogoda, godziny otwarcia, ceny, rozkłady, wyniki meczów) i do pytań, na które nie ma odpowiedzi w naszych danych.
+2. Dane „POGODA” niżej – do pytań o pogodę (podaj źródło: „wg prognozy MET Norway / yr.no”). Wyszukiwarka internetowa – do innych rzeczy zmiennych (godziny otwarcia, ceny, rozkłady, wyniki meczów) i do pytań, na które nie ma odpowiedzi w naszych danych.
 3. Własna wiedza – tylko ogólna i pewna (historia, zabytki, geografia). Jeśli nie masz pewności co do nazwy miejsca, adresu, godziny czy ceny, nie podawaj jej.
 
 LINKI – NAJWAŻNIEJSZE ZASADY
@@ -87,7 +87,7 @@ function wantedDays(q, d) {
 }
 
 /** Z całej bazy wiedzy wybiera to, co pasuje do pytania (słowa i daty), plus kilka najnowszych – żeby prompt był krótki */
-function pick(ctx, question, d, small = false) {
+function pick(ctx, question, d, small = false, mode = '') {
   const q = new Set(words(question));
   const score = (text) => { let n = 0; for (const w of words(text)) if (q.has(w)) n++; return n; };
   const top = (arr, text, nMatch, nFresh, first = []) => {
@@ -95,10 +95,12 @@ function pick(ctx, question, d, small = false) {
     const fresh = arr.filter((x) => !scored.includes(x) && !first.includes(x)).slice(0, nFresh);
     return [...first, ...scored, ...fresh];
   };
-  const want = wantedDays(question, d);
+  const want = mode === 'brief' ? new Set(d.today) : wantedDays(question, d);
   const allEv = ctx.events || [];
   const onDays = want.size ? allEv.filter((e) => (e.d || []).some((x) => want.has(x))).slice(0, 18) : [];
-  const news = top(ctx.news || [], (a) => `${a.t} ${a.l} ${a.c}`, small ? 4 : 6, small ? 2 : 6).map((a) => `- [${a.t}](${a.u}) (${a.c}, ${a.d}): ${a.l}`);
+  const yesterday = iso(new Date(Date.now() - DAY));
+  const newsPool = mode === 'brief' ? (ctx.news || []).filter((a) => a.d >= yesterday).concat((ctx.news || []).filter((a) => a.d < yesterday)) : ctx.news || [];
+  const news = top(newsPool, (a) => `${a.t} ${a.l} ${a.c}`, small || mode ? 2 : 6, mode === 'brief' ? 10 : small ? 2 : 6).map((a) => `- [${a.t}](${a.u}) (${a.c}, ${a.d}): ${a.l}`);
   const events = top(allEv, (e) => `${e.t} ${e.y} ${e.p}`, small ? 2 : 6, small ? 0 : onDays.length ? 4 : 12, small ? onDays.slice(0, 4) : onDays).map((e) => `- [${e.t}](${e.u}) – ${e.y}, ${e.p}, ${e.w}`);
   const note = want.size ? `\n(Pytanie dotyczy dni: ${[...want].join(', ')}. ${onDays.length ? `Wydarzeń w te dni w kalendarzu: ${onDays.length} – są na początku listy.` : 'W kalendarzu nie ma wydarzeń w te dni.'})` : '';
   return `WIEDZA PORTALU (stan na ${ctx.at ? ctx.at.slice(0, 16).replace('T', ' ') : 'nieznany'} UTC)\nWiadomości:\n${news.join('\n') || '(brak)'}\nWydarzenia (od najbliższych):${note}\n${events.join('\n') || '(brak)'}`;
@@ -119,7 +121,47 @@ async function loadContext(env, ctxWait) {
   try { return res && res.ok ? await res.json() : {}; } catch { return {}; }
 }
 
-const ARTICLE_PATH = /^\/(miasto|powiat|kraj|sport)\/[a-z0-9-]{3,160}$/;
+// Pogoda: MET Norway (api.met.no) – darmowa także do użytku komercyjnego, wymaga podania źródła i identyfikacji (User-Agent)
+const SKY = [
+  ['thunder', 'burza'], ['heavysnow', 'intensywny śnieg'], ['lightsnow', 'słaby śnieg'], ['snow', 'śnieg'], ['sleet', 'deszcz ze śniegiem'],
+  ['heavyrain', 'ulewa'], ['lightrain', 'słaby deszcz'], ['rainshowers', 'przelotny deszcz'], ['rain', 'deszcz'], ['fog', 'mgła'],
+  ['partlycloudy', 'częściowe zachmurzenie'], ['fair', 'przeważnie słonecznie'], ['clearsky', 'bezchmurnie'], ['cloudy', 'pochmurno'],
+];
+const sky = (code = '') => (SKY.find(([k]) => code.startsWith(k)) || [, 'brak danych'])[1];
+const hourPl = (t) => Number(new Intl.DateTimeFormat('pl-PL', { hour: 'numeric', hourCycle: 'h23', timeZone: 'Europe/Warsaw' }).format(new Date(t)));
+
+async function loadWeather(ctxWait) {
+  const url = 'https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=50.81&lon=19.12';
+  const key = new Request(`${url}&ck=1`);
+  const cache = caches.default;
+  const hit = await cache.match(key);
+  if (hit) return hit.text();
+  const res = await fetch(url, { headers: { 'User-Agent': 'czestokocham.pl asystent (czestokocham@gmail.com)' } }).catch(() => null);
+  if (!res || !res.ok) return '';
+  let ts;
+  try { ts = (await res.json()).properties.timeseries; } catch { return ''; }
+  const now = ts[0];
+  const days = new Map();
+  for (const t of ts) {
+    const day = iso(new Date(t.time));
+    const d = days.get(day) || { min: 99, max: -99, rain: 0, sym: '', symDist: 99 };
+    const temp = t.data.instant.details.air_temperature;
+    d.min = Math.min(d.min, temp); d.max = Math.max(d.max, temp);
+    // co godzinę przez ~2,5 doby, dalej co 6 godzin – wtedy suma z 6 godzin
+    d.rain += t.data.next_1_hours?.details?.precipitation_amount ?? t.data.next_6_hours?.details?.precipitation_amount ?? 0;
+    const dist = Math.abs(hourPl(t.time) - 12);
+    const s6 = t.data.next_6_hours?.summary?.symbol_code;
+    if (s6 && dist < d.symDist) { d.sym = s6; d.symDist = dist; }
+    days.set(day, d);
+  }
+  const lines = [...days].slice(0, 4).map(([day, d]) => `- ${label(new Date(day + 'T12:00:00Z'))}: ${sky(d.sym)}, od ${Math.round(d.min)} do ${Math.round(d.max)}°C${d.rain >= 0.3 ? `, opady ok. ${d.rain.toFixed(1)} mm` : ''}`);
+  const n = now.data.instant.details;
+  const text = `POGODA W CZĘSTOCHOWIE (prognoza MET Norway, yr.no)\nTeraz: ${Math.round(n.air_temperature)}°C, ${sky(now.data.next_1_hours?.summary?.symbol_code)}, wiatr ${Math.round(n.wind_speed * 3.6)} km/h, wilgotność ${Math.round(n.relative_humidity)}%.\n${lines.join('\n')}`;
+  ctxWait.waitUntil(cache.put(key, new Response(text, { headers: { 'Cache-Control': 'public, max-age=1800' } })));
+  return text;
+}
+
+const ARTICLE_PATH = /^\/(miasto|powiat|kraj|sport|wydarzenia)\/[a-z0-9-]{3,160}$/;
 const ARTICLE_MAX = 6000;
 
 /** Treść artykułu prosto ze strony portalu (nie od przeglądarki) – tytuł, lead, data, akapity; pamiętana godzinę */
@@ -142,6 +184,8 @@ async function loadArticle(env, path, ctxWait) {
     .on('p.art-lead', grab('lead'))
     .on('.byline time', grab('date'))
     .on('.source p', grab('source'))
+    .on('.facts .fact', grab('body'))
+    .on('p.org', grab('body'))
     .on('.body p, .body li, .body h2, .body h3, .body blockquote', grab('body'))
     .transform(res).arrayBuffer();
   if (!parts.title || !parts.body.length) return null;
@@ -162,9 +206,26 @@ Czytelnik pyta o konkretny artykuł z naszego portalu – jego treść jest niż
 - Nie oceniaj bohaterów tekstu i nie zajmuj stanowiska w sporach politycznych.
 - Nawet jeśli artykuł wspomina inne portale lub media (np. jako źródło czy miejsce publikacji nagrania), nie wymieniaj ich – pomiń tę informację.
 - Nie zaczynaj od powtórzenia pytania ani od tytułu w pogrubieniu. Odpowiedź do ok. 120 słów; „kontekst” i „co to oznacza” – najwyżej 3 krótkie punkty.
+- Jeśli to strona wydarzenia z naszego kalendarza, pomagaj praktycznie: termin, miejsce, bilety, dojazd (komunikacja miejska MPK – bez wymyślania numerów linii i nazw przystanków; odeślij do wyszukiwarki połączeń MPK lub Google Maps), co jeszcze w okolicy lub tego dnia.
 - O tym artykule mów „ten tekst” i nie linkuj do niego. Do innych naszych tekstów z „WIEDZY PORTALU” możesz linkować, gdy są na ten sam temat.`;
 
-// Groq liczy limity na całe konto, osobno dla każdego modelu – przy limicie 120b przechodzimy na 20b (osobna pula), potem Gemini
+const MODES = {
+  brief: `CZĘSTOCHOWA W 60 SEKUND
+Czytelnik prosi o krótkie podsumowanie dnia w mieście. Odpowiedź będzie też czytana na głos, więc:
+- Zacznij jednym zdaniem o pogodzie na dziś (z danych POGODA).
+- Potem 4–5 najważniejszych dzisiejszych i wczorajszych wiadomości z „WIEDZY PORTALU”, każda jako punkt: - [krótki tytuł](adres) – jedno zdanie, co się stało.
+- Na koniec 1–2 wydarzenia na dziś wieczór z kalendarza (z linkiem), jeśli są.
+- Razem najwyżej 150 słów. Bez wstępu typu „Oto podsumowanie”. Nie dodawaj informacji spoza danych.`,
+  plan: `PLANER DNIA
+Czytelnik prosi o plan dnia w Częstochowie według podanych warunków (kiedy, z kim, klimat, budżet). Ułóż konkretny plan:
+- Trzy części: **Rano**, **Po południu**, **Wieczorem** – w każdej 1–2 punkty listy.
+- Najpierw wydarzenia z naszego kalendarza w wybrany dzień (z linkiem [tytuł](adres), godziną i miejscem), potem pewne, stałe miejsca miasta (Jasna Góra, Aleje NMP, parki, muzea, Jura). Nie wymyślaj lokali, adresów, godzin otwarcia ani cen – gdy podajesz miejsce bez danych, pisz ogólnie.
+- Dopasuj plan do pogody z danych POGODA (deszcz → pod dachem) i do budżetu (za darmo → tylko bezpłatne propozycje).
+- Na końcu jedno zdanie praktycznej rady (dojazd, co zabrać) i link do [kalendarza wydarzeń](/wydarzenia).
+- Razem najwyżej 200 słów.`,
+};
+
+// Groq liczy limity na całe konto, osobno dla każdego modelu – przy limicie 120b przechodzimy na 20b (osobna pula), potem modele Gemini
 function providers(env) {
   const list = [];
   const search = env.WEB_SEARCH === '1' ? { tools: [{ type: 'browser_search' }], tool_choice: 'auto' } : {};
@@ -178,8 +239,13 @@ function providers(env) {
       });
     }
   }
+  // Gemini też liczy limity osobno dla każdego modelu – lżejsze wersje jako ostatnia deska ratunku
   if (env.GEMINI_API_KEY) {
-    list.push({ name: 'gemini', url: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', key: env.GEMINI_API_KEY, model: env.GEMINI_MODEL || 'gemini-3.5-flash', extra: { reasoning_effort: 'low' }, plain: { reasoning_effort: 'low' } });
+    for (const model of [env.GEMINI_MODEL || 'gemini-3.5-flash', 'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite']) {
+      // wersje lite przy „low” wklejają tok rozumowania do odpowiedzi – tylko „minimal”
+      const lite = model.includes('lite');
+      list.push({ name: `gemini ${model}`, url: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', key: env.GEMINI_API_KEY, model, extra: { reasoning_effort: lite ? 'minimal' : 'low' }, plain: { reasoning_effort: lite ? 'minimal' : 'low' } });
+    }
   }
   return list;
 }
@@ -217,9 +283,11 @@ export default {
 
     const d = dates();
     const art = typeof body.article === 'string' && ARTICLE_PATH.test(body.article) ? await loadArticle(env, body.article, ctx) : null;
-    const kb = pick(await loadContext(env, ctx), msgs.filter((m) => m.role === 'user').slice(-2).map((m) => m.content).join(' '), d, !!art);
+    const mode = MODES[body.mode] ? body.mode : '';
+    const [ctxData, weather] = await Promise.all([loadContext(env, ctx), loadWeather(ctx)]);
+    const kb = pick(ctxData, msgs.filter((m) => m.role === 'user').slice(-2).map((m) => m.content).join(' '), d, !!art, mode);
     const artText = art ? `\n\n${ARTICLE_RULES}\n\nARTYKUŁ: ${art.title}\nAdres: ${art.path}${art.date ? `\nOpublikowano: ${art.date}` : ''}${art.source ? `\n${art.source}` : ''}${art.lead ? `\nLead: ${art.lead}` : ''}\nTreść:\n${art.body}` : '';
-    const messages = [{ role: 'system', content: `${SYSTEM}\n\nDATY\n${d.text}${artText}\n\n${kb}` }, ...msgs];
+    const messages = [{ role: 'system', content: `${SYSTEM}\n\nDATY\n${d.text}${weather ? `\n\n${weather}` : ''}${mode ? `\n\n${MODES[mode]}` : ''}${artText}\n\n${kb}` }, ...msgs];
 
     const errors = [];
     for (const p of providers(env)) {
