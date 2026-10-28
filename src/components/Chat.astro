@@ -1,0 +1,224 @@
+---
+// Asystent Częstokocham: czat z AI. Strona jest statyczna, więc pytania idą do Workera Cloudflare (worker/index.js),
+// który trzyma klucze i dokłada wiedzę portalu (/kontekst.json). Bez SITE.chatApi czat się nie pokazuje.
+import { SITE } from '../lib/site';
+const api = SITE.chatApi;
+const hints = ['Co robić w weekend w Częstochowie?', 'Jakie są dziś wydarzenia?', 'Co nowego w mieście?', 'Opowiedz o Jasnej Górze'];
+---
+{api && (
+  <div class="chat" data-chat={api}>
+    <section class="chat-panel" id="chat-panel" role="dialog" aria-label="Asystent Częstokocham" hidden>
+      <header class="chat-head">
+        <span class="chat-av" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M12 2.5l1.9 5.6 5.6 1.9-5.6 1.9L12 17.5l-1.9-5.6L4.5 10l5.6-1.9zM18.5 15l.9 2.6 2.6.9-2.6.9-.9 2.6-.9-2.6-2.6-.9 2.6-.9z"/></svg></span>
+        <div class="chat-title">
+          <strong>Asystent Częstokocham</strong>
+          <span>Pytaj o miasto, wydarzenia i okolicę</span>
+        </div>
+        <button class="chat-x" type="button" aria-label="Zamknij czat" data-chat-close><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+      </header>
+      <div class="chat-log" role="log" aria-live="polite" aria-relevant="additions text" data-chat-log>
+        <div class="chat-msg bot"><div class="chat-b">Cześć! Jestem asystentem Częstokocham. Znam najnowsze wiadomości i wydarzenia z Częstochowy, a o resztę zapytam internet. W czym pomóc?</div></div>
+        <div class="chat-hints" data-chat-hints>
+          {hints.map((h) => <button type="button" class="chat-hint">{h}</button>)}
+        </div>
+      </div>
+      <form class="chat-form" data-chat-form autocomplete="off">
+        <textarea rows="1" maxlength="1000" placeholder="Zadaj pytanie…" aria-label="Twoje pytanie" data-chat-input></textarea>
+        <button class="chat-send" type="submit" aria-label="Wyślij" data-chat-send><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+      </form>
+      <p class="chat-note">Odpowiada sztuczna inteligencja i może się mylić. Ważne informacje sprawdź w źródle.</p>
+    </section>
+    <button class="chat-fab" type="button" aria-expanded="false" aria-controls="chat-panel" data-chat-open>
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true"><path d="M12 2.5l1.9 5.6 5.6 1.9-5.6 1.9L12 17.5l-1.9-5.6L4.5 10l5.6-1.9zM18.5 15l.9 2.6 2.6.9-2.6.9-.9 2.6-.9-2.6-2.6-.9 2.6-.9z"/></svg>
+      <span>Zapytaj asystenta</span>
+    </button>
+  </div>
+  <script is:inline>
+    (function () {
+      var root = document.querySelector('[data-chat]');
+      if (!root || !window.fetch || !window.ReadableStream) { if (root) root.hidden = true; return; }
+      var api = root.dataset.chat.replace(/\/$/, '') + '/chat';
+      var panel = root.querySelector('.chat-panel'), fab = root.querySelector('[data-chat-open]');
+      var log = root.querySelector('[data-chat-log]'), form = root.querySelector('[data-chat-form]');
+      var input = root.querySelector('[data-chat-input]'), send = root.querySelector('[data-chat-send]');
+      var hints = root.querySelector('[data-chat-hints]');
+      var KEY = 'ck-chat', history = [], busy = false, ctrl = null;
+      try { history = JSON.parse(sessionStorage.getItem(KEY) || '[]'); } catch (e) {}
+      var save = function () { try { sessionStorage.setItem(KEY, JSON.stringify(history.slice(-20))); } catch (e) {} };
+
+      // bezpieczny, minimalny markdown: najpierw ucieczka HTML, potem linki, pogrubienia i listy
+      function esc(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+      function inline(s) {
+        s = esc(s);
+        s = s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, function (m, t, u) {
+          u = u.replace(/&amp;/g, '&');
+          if (/^https?:\/\//i.test(u) || u.charAt(0) === '/') {
+            var ext = /^https?:/i.test(u) && u.indexOf(location.origin) !== 0;
+            return '<a href="' + esc(u) + '"' + (ext ? ' target="_blank" rel="noopener noreferrer"' : '') + '>' + t + '</a>';
+          }
+          return t;
+        });
+        return s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+      }
+      function render(md) {
+        md = md.replace(/【[^】]*】/g, '');
+        var out = '', list = false;
+        md.split('\n').forEach(function (line) {
+          var li = line.match(/^\s*(?:[*\-•]|\d+\.)\s+(.*)/);
+          if (li) { if (!list) { out += '<ul>'; list = true; } out += '<li>' + inline(li[1]) + '</li>'; return; }
+          if (list) { out += '</ul>'; list = false; }
+          if (line.trim()) out += '<p>' + inline(line.replace(/^#{1,4}\s+/, '')) + '</p>';
+        });
+        return out + (list ? '</ul>' : '');
+      }
+
+      function add(role, text) {
+        var m = document.createElement('div'); m.className = 'chat-msg ' + (role === 'user' ? 'me' : 'bot');
+        var b = document.createElement('div'); b.className = 'chat-b';
+        if (role === 'user') b.textContent = text; else b.innerHTML = render(text);
+        m.appendChild(b); log.appendChild(m); log.scrollTop = log.scrollHeight;
+        return b;
+      }
+      history.forEach(function (m) { add(m.role, m.content); });
+      if (history.length && hints) hints.hidden = true;
+
+      function open() {
+        panel.hidden = false; fab.setAttribute('aria-expanded', 'true'); root.classList.add('open');
+        document.documentElement.classList.add('chat-on');
+        log.scrollTop = log.scrollHeight; setTimeout(function () { input.focus(); }, 60);
+      }
+      function close() {
+        panel.hidden = true; fab.setAttribute('aria-expanded', 'false'); root.classList.remove('open');
+        document.documentElement.classList.remove('chat-on'); fab.focus();
+      }
+      fab.addEventListener('click', function () { panel.hidden ? open() : close(); });
+      root.querySelector('[data-chat-close]').addEventListener('click', close);
+      addEventListener('keydown', function (e) { if (e.key === 'Escape' && !panel.hidden) close(); });
+      if (hints) hints.addEventListener('click', function (e) { var b = e.target.closest('.chat-hint'); if (b) ask(b.textContent); });
+
+      function grow() { input.style.height = ''; if (input.value) input.style.height = Math.min(input.scrollHeight, 120) + 'px'; }
+      input.addEventListener('input', grow);
+      input.addEventListener('keydown', function (e) { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); form.requestSubmit(); } });
+      form.addEventListener('submit', function (e) { e.preventDefault(); ask(input.value); });
+
+      function ask(q) {
+        q = (q || '').trim();
+        if (!q || busy) return;
+        busy = true; send.disabled = true; input.value = ''; grow();
+        if (hints) hints.hidden = true;
+        add('user', q); history.push({ role: 'user', content: q });
+        var bubble = add('bot', ''); bubble.classList.add('typing'); bubble.innerHTML = '<i></i><i></i><i></i>';
+        var text = '';
+        ctrl = new AbortController();
+        fetch(api, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ messages: history.slice(-10) }), signal: ctrl.signal })
+          .then(function (res) {
+            if (!res.ok) return res.json().catch(function () { return {}; }).then(function (j) { throw new Error(j.error || 'Coś poszło nie tak. Spróbuj ponownie.'); });
+            var rd = res.body.getReader(), dec = new TextDecoder(), buf = '';
+            function pump() {
+              return rd.read().then(function (r) {
+                if (r.done) return;
+                buf += dec.decode(r.value, { stream: true });
+                var parts = buf.split('\n\n'); buf = parts.pop();
+                parts.forEach(function (p) {
+                  p.split('\n').forEach(function (l) {
+                    if (l.indexOf('data:') !== 0) return;
+                    var d = l.slice(5).trim(); if (!d || d === '[DONE]') return;
+                    try {
+                      var c = JSON.parse(d).choices[0].delta.content;
+                      if (c) { text += c; bubble.classList.remove('typing'); bubble.innerHTML = render(text); log.scrollTop = log.scrollHeight; }
+                    } catch (e) {}
+                  });
+                });
+                return pump();
+              });
+            }
+            return pump();
+          })
+          .then(function () {
+            if (!text) throw new Error('Nie udało się wygenerować odpowiedzi. Spróbuj inaczej sformułować pytanie.');
+            history.push({ role: 'assistant', content: text }); save();
+          })
+          .catch(function (err) {
+            history.pop(); save();
+            bubble.classList.remove('typing'); bubble.classList.add('err');
+            bubble.textContent = text || (err && err.name !== 'AbortError' ? err.message : 'Przerwano.');
+            if (!/Spróbuj|spróbuj/.test(bubble.textContent)) bubble.textContent += ' Spróbuj ponownie za chwilę.';
+          })
+          .finally(function () { busy = false; send.disabled = false; ctrl = null; input.focus(); });
+      }
+    })();
+  </script>
+)}
+
+<style is:global>
+  .chat { position: fixed; right: 20px; bottom: 20px; z-index: 45; font-family: var(--font); }
+  .chat[hidden] { display: none; }
+  .chat-fab {
+    display: inline-flex; align-items: center; gap: 10px; min-height: 52px; padding: 0 20px 0 16px;
+    background: var(--red); color: #fff; border: 0; border-radius: 999px; cursor: pointer; font: inherit; font-weight: 700; font-size: 1rem;
+    box-shadow: 0 14px 34px -12px rgb(227 20 27 / 0.65);
+    transition: background-color 0.2s, transform 0.2s var(--ease), box-shadow 0.25s;
+  }
+  .chat-fab:hover { background: var(--red-dark); transform: translateY(-2px); }
+  .chat-fab:active { transform: scale(0.97); }
+  .chat.open .chat-fab { background: var(--navy); box-shadow: 0 14px 34px -12px rgb(22 24 48 / 0.6); }
+  .chat-panel {
+    position: absolute; right: 0; bottom: 68px; width: min(400px, calc(100vw - 32px)); height: min(620px, calc(100dvh - 120px));
+    display: flex; flex-direction: column; overflow: hidden; background: var(--paper); border-radius: var(--r-xl);
+    box-shadow: 0 30px 70px -20px rgb(22 24 48 / 0.55), 0 0 0 1px rgb(22 24 48 / 0.06);
+    animation: chat-in 0.28s var(--ease);
+  }
+  .chat-panel[hidden] { display: none; }
+  @keyframes chat-in { from { opacity: 0; transform: translateY(14px) scale(0.97); } }
+  .chat-head { display: flex; align-items: center; gap: 12px; padding: 16px 16px 16px 18px; background: var(--navy); color: #fff; }
+  .chat-av { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 999px; background: var(--red); }
+  .chat-title { flex: 1; min-width: 0; line-height: 1.25; }
+  .chat-title strong { display: block; font-size: 1.0625rem; font-weight: 700; }
+  .chat-title span { font-size: 0.8125rem; color: var(--on-navy-soft); }
+  .chat-x { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border: 0; border-radius: 999px; background: rgb(255 255 255 / 0.08); color: #fff; cursor: pointer; transition: background-color 0.2s; }
+  .chat-x:hover { background: rgb(255 255 255 / 0.18); }
+  .chat-log { flex: 1; overflow-y: auto; overscroll-behavior: contain; padding: 18px 16px 8px; display: flex; flex-direction: column; gap: 12px; scroll-behavior: smooth; }
+  .chat-msg { display: flex; }
+  .chat-msg.me { justify-content: flex-end; }
+  .chat-b { max-width: 88%; padding: 11px 15px; border-radius: 18px; font-size: 0.96875rem; line-height: 1.5; color: var(--ink); background: #fff; border-bottom-left-radius: 6px; overflow-wrap: anywhere; }
+  .chat-msg.me .chat-b { background: var(--ink); color: #fff; border-bottom-left-radius: 18px; border-bottom-right-radius: 6px; max-width: 80%; }
+  .chat-b p + p, .chat-b p + ul, .chat-b ul + p { margin-top: 0.6em; }
+  .chat-b ul { padding-left: 1.2em; list-style: disc; }
+  .chat-b li + li { margin-top: 0.25em; }
+  .chat-b a { color: var(--red-ink); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+  .chat-b.err { background: var(--red-soft); color: var(--red-dark); }
+  .chat-b.typing { display: inline-flex; gap: 5px; padding: 15px 16px; }
+  .chat-b.typing i { width: 7px; height: 7px; border-radius: 99px; background: var(--ink-soft); animation: chat-dot 1s infinite ease-in-out; }
+  .chat-b.typing i:nth-child(2) { animation-delay: 0.15s; }
+  .chat-b.typing i:nth-child(3) { animation-delay: 0.3s; }
+  @keyframes chat-dot { 0%, 80%, 100% { opacity: 0.3; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-3px); } }
+  .chat-hints { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 2px; }
+  .chat-hints[hidden] { display: none; }
+  .chat-hint { padding: 9px 14px; border: 0; border-radius: 999px; background: #fff; color: var(--ink); font: inherit; font-size: 0.9rem; font-weight: 600; cursor: pointer; text-align: left; transition: background-color 0.2s, color 0.2s, transform 0.2s var(--ease); }
+  .chat-hint:hover { background: var(--ink); color: #fff; }
+  .chat-hint:active { transform: scale(0.97); }
+  .chat-form { display: flex; align-items: flex-end; gap: 8px; padding: 10px 12px 6px; background: var(--paper); }
+  .chat-form textarea { flex: 1; resize: none; min-height: 46px; max-height: 120px; padding: 12px 16px; border: 0; border-radius: 23px; background: #fff; color: var(--ink); font: inherit; font-size: 1rem; line-height: 1.4; outline: 2px solid transparent; transition: outline-color 0.2s; }
+  .chat-form textarea:focus-visible { outline-color: var(--ink); }
+  .chat-send { flex: none; display: grid; place-items: center; width: 46px; height: 46px; border: 0; border-radius: 999px; background: var(--red); color: #fff; cursor: pointer; transition: background-color 0.2s, transform 0.2s var(--ease); }
+  .chat-send:hover { background: var(--red-dark); }
+  .chat-send:active { transform: scale(0.94); }
+  .chat-send:disabled { background: var(--tone-2); color: var(--ink-soft); cursor: default; }
+  .chat-note { padding: 0 16px 12px; font-size: 0.75rem; line-height: 1.4; color: var(--ink-soft); text-align: center; background: var(--paper); }
+  .chat-fab:focus-visible, .chat-x:focus-visible, .chat-send:focus-visible, .chat-hint:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+  .chat-x:focus-visible { outline-color: #fff; }
+  @media (max-width: 640px) {
+    .chat { right: 16px; bottom: 16px; }
+    .chat-fab span { display: none; }
+    .chat-fab { width: 56px; height: 56px; padding: 0; justify-content: center; }
+    .chat-panel { position: fixed; inset: 0; width: auto; height: auto; border-radius: 0; box-shadow: none; }
+    .chat.open .chat-fab { display: none; }
+    html.chat-on { overflow: hidden; }
+    .to-top { bottom: 84px; right: 16px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .chat-panel { animation: none; }
+    .chat-log { scroll-behavior: auto; }
+    .chat-b.typing i { animation: none; opacity: 0.6; }
+  }
+</style>

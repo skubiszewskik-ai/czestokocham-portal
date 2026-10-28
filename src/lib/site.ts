@@ -8,6 +8,8 @@ export const SITE = {
   facebook: 'https://www.facebook.com/czestokocham',
   // licznik polubień na żywo – aplikacja internetowa Budzika (scripts/budzik.gs → doGet)
   fbCounter: 'https://script.google.com/macros/s/AKfycbx43lRfEsc9KoGwBX8H8A6kkhxedYCmZd8DSIb_vjMJWK8orc57XPP2zZSBIb9iU5ov/exec',
+  // adres Workera czatu (worker/index.js); puste = czat wyłączony
+  chatApi: 'https://czestokocham-czat.czestokocham-pl.workers.dev',
   lang: 'pl',
 };
 

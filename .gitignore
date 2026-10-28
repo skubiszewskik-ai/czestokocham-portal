@@ -11,3 +11,5 @@ service-account*.json
 .firebase
 .claude
 .DS_Store
+
+worker/.wrangler

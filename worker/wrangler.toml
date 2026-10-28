@@ -1,0 +1,18 @@
+# Czat „Asystent Częstokocham” – pośrednik między stroną a darmowymi modelami AI (klucze tylko tutaj, nigdy w kodzie strony).
+# Wdrożenie: cd worker && npx wrangler deploy ; sekrety: npx wrangler secret put GROQ_API_KEY (i GEMINI_API_KEY)
+name = "czestokocham-czat"
+main = "index.js"
+compatibility_date = "2025-10-01"
+
+[vars]
+SITE = "https://czestokocham.pl"
+GROQ_MODEL = "openai/gpt-oss-120b"
+WEB_SEARCH = "1"
+
+# limit zapytań na adres IP (darmowy binding Cloudflare)
+[[ratelimits]]
+name = "LIMITER"
+namespace_id = "1001"
+  [ratelimits.simple]
+  limit = 12
+  period = 60
