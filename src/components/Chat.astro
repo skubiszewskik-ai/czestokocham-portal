@@ -46,24 +46,50 @@ const hints = ['Co robić w weekend w Częstochowie?', 'Jakie są dziś wydarzen
       try { history = JSON.parse(sessionStorage.getItem(KEY) || '[]'); } catch (e) {}
       var save = function () { try { sessionStorage.setItem(KEY, JSON.stringify(history.slice(-20))); } catch (e) {} };
 
+      // linki: tylko istniejące strony portalu (lista z /kontekst.json + działy) i nigdy do lokalnej konkurencji
+      var SECTIONS = ['/', '/miasto', '/powiat', '/kraj', '/sport', '/wydarzenia', '/szukaj', '/o-nas', '/reklama'];
+      var RIVALS = /(^|\.)(wczestochowie\.pl|czestochowskie\.pl|czestochowskie24\.pl|czestochowaonline\.pl|gazetacz\.com\.pl|zycieczestochowy\.pl|zycieregionu\.com\.pl|gazetaregionalna\.com|miejska\.pl|sport\.czest\.pl|wpowiecie\.pl|radiojura\.pl|fiat\.fm|wyborcza\.pl|naszemiasto\.pl|dziennikzachodni\.pl)$/i;
+      var known = null;
+      function loadKnown() {
+        if (known) return;
+        known = new Set(SECTIONS);
+        fetch('/kontekst.json').then(function (r) { return r.json(); }).then(function (j) {
+          (j.news || []).concat(j.events || []).forEach(function (x) { if (x.u) known.add(x.u); });
+          known.ready = true;
+          // odpowiedzi narysowane przed wczytaniem listy – rysujemy jeszcze raz
+          [].forEach.call(log.querySelectorAll('.chat-b[data-md]'), function (b) { b.innerHTML = render(b.dataset.md); });
+        }).catch(function () {});
+      }
+      function linkOk(u) {
+        if (u.charAt(0) === '/') {
+          var path = u.split(/[?#]/)[0].replace(/\/$/, '') || '/';
+          return known && (SECTIONS.indexOf(path) > -1 || known.has(path) || !known.ready && /^\/(wydarzenia|miasto|powiat|kraj|sport)\/[a-z0-9-]+$/.test(path));
+        }
+        try { var h = new URL(u).hostname.replace(/^www\./, ''); } catch (e) { return false; }
+        if (h === 'czestokocham.pl') return linkOk(new URL(u).pathname);
+        return !RIVALS.test(h);
+      }
+
       // bezpieczny, minimalny markdown: najpierw ucieczka HTML, potem linki, pogrubienia i listy
       function esc(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
       function inline(s) {
         s = esc(s);
         s = s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, function (m, t, u) {
           u = u.replace(/&amp;/g, '&');
-          if (/^https?:\/\//i.test(u) || u.charAt(0) === '/') {
-            var ext = /^https?:/i.test(u) && u.indexOf(location.origin) !== 0;
-            return '<a href="' + esc(u) + '"' + (ext ? ' target="_blank" rel="noopener noreferrer"' : '') + '>' + t + '</a>';
-          }
-          return t;
+          if (!/^https?:\/\//i.test(u) && u.charAt(0) !== '/') return t;
+          if (!linkOk(u)) return t;
+          var ext = /^https?:/i.test(u) && !/^https?:\/\/(www\.)?czestokocham\.pl/i.test(u);
+          return '<a href="' + esc(u) + '"' + (ext ? ' target="_blank" rel="noopener noreferrer"' : '') + '>' + t + '</a>';
         });
-        return s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+        return s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>').replace(/(^|[\s(])\*([^*\s][^*]*?)\*(?=[\s.,;:!?)]|$)/g, '$1$2');
       }
       function render(md) {
         md = md.replace(/【[^】]*】/g, '');
         var out = '', list = false;
         md.split('\n').forEach(function (line) {
+          // wiersze tabel zamieniamy na punkty listy, separatory tabel pomijamy
+          if (/^\s*\|?[\s:|-]+\|[\s:|-]*$/.test(line)) return;
+          if (/^\s*\|.*\|\s*$/.test(line)) line = '- ' + line.replace(/^\s*\||\|\s*$/g, '').split('|').map(function (c) { return c.trim(); }).filter(Boolean).join(' – ');
           var li = line.match(/^\s*(?:[*\-•]|\d+\.)\s+(.*)/);
           if (li) { if (!list) { out += '<ul>'; list = true; } out += '<li>' + inline(li[1]) + '</li>'; return; }
           if (list) { out += '</ul>'; list = false; }
@@ -75,7 +101,7 @@ const hints = ['Co robić w weekend w Częstochowie?', 'Jakie są dziś wydarzen
       function add(role, text) {
         var m = document.createElement('div'); m.className = 'chat-msg ' + (role === 'user' ? 'me' : 'bot');
         var b = document.createElement('div'); b.className = 'chat-b';
-        if (role === 'user') b.textContent = text; else b.innerHTML = render(text);
+        if (role === 'user') b.textContent = text; else { b.dataset.md = text; b.innerHTML = render(text); }
         m.appendChild(b); log.appendChild(m); log.scrollTop = log.scrollHeight;
         return b;
       }
@@ -83,7 +109,7 @@ const hints = ['Co robić w weekend w Częstochowie?', 'Jakie są dziś wydarzen
       if (history.length && hints) hints.hidden = true;
 
       function open() {
-        panel.hidden = false; fab.setAttribute('aria-expanded', 'true'); root.classList.add('open');
+        loadKnown(); panel.hidden = false; fab.setAttribute('aria-expanded', 'true'); root.classList.add('open');
         document.documentElement.classList.add('chat-on');
         log.scrollTop = log.scrollHeight; setTimeout(function () { input.focus(); }, 60);
       }
@@ -125,7 +151,7 @@ const hints = ['Co robić w weekend w Częstochowie?', 'Jakie są dziś wydarzen
                     var d = l.slice(5).trim(); if (!d || d === '[DONE]') return;
                     try {
                       var c = JSON.parse(d).choices[0].delta.content;
-                      if (c) { text += c; bubble.classList.remove('typing'); bubble.innerHTML = render(text); log.scrollTop = log.scrollHeight; }
+                      if (c) { text += c; bubble.classList.remove('typing'); bubble.dataset.md = text; bubble.innerHTML = render(text); log.scrollTop = log.scrollHeight; }
                     } catch (e) {}
                   });
                 });
@@ -140,7 +166,7 @@ const hints = ['Co robić w weekend w Częstochowie?', 'Jakie są dziś wydarzen
           })
           .catch(function (err) {
             history.pop(); save();
-            bubble.classList.remove('typing'); bubble.classList.add('err');
+            bubble.classList.remove('typing'); bubble.classList.add('err'); delete bubble.dataset.md;
             bubble.textContent = text || (err && err.name !== 'AbortError' ? err.message : 'Przerwano.');
             if (!/Spróbuj|spróbuj/.test(bubble.textContent)) bubble.textContent += ' Spróbuj ponownie za chwilę.';
           })

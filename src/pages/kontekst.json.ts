@@ -18,6 +18,6 @@ export const GET: APIRoute = () => {
     .filter((x) => x.dates.length)
     .sort((a, b) => a.dates[0].day.localeCompare(b.dates[0].day))
     .slice(0, 80)
-    .map(({ e, dates }) => ({ t: e.title, y: e.type, p: e.place, w: dates.slice(0, 4).map(whenText).join('; '), u: eventUrl(e) }));
+    .map(({ e, dates }) => ({ t: e.title, y: e.type, p: e.place, w: dates.slice(0, 4).map(whenText).join('; '), d: dates.slice(0, 31).map((x) => x.day), u: eventUrl(e) }));
   return new Response(JSON.stringify({ at: new Date().toISOString(), news, events }), { headers: { 'content-type': 'application/json' } });
 };
