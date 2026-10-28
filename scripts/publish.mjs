@@ -103,8 +103,9 @@ if (args.has('--redaktor') || build.redaktorRequested) {
       .map((d) => ({ slug: d.id, ...d.data() })).filter((a) => a.status === 'published')
       .sort((a, b) => (b.publishedAt?.toMillis?.() || 0) - (a.publishedAt?.toMillis?.() || 0))),
     pending: async () =>
-      (await firestore.collection('articles').where('origin', '==', 'redaktor').where('status', '==', 'draft').select('publishedAt').get())
-        .docs.map((d) => ({ slug: d.id, publishedAt: d.get('publishedAt')?.toMillis() || 0 })),
+      (await firestore.collection('articles').where('origin', '==', 'redaktor').where('status', '==', 'draft').select('publishedAt', 'keep').get())
+        // „keep” – teksty cofnięte z publikacji do poprawki; nie kasujemy ich jako starych propozycji
+        .docs.filter((d) => !d.get('keep')).map((d) => ({ slug: d.id, publishedAt: d.get('publishedAt')?.toMillis() || 0 })),
     // zostaje tylko ślad (redaktor nie wróci do tematu), treść i zdjęcia znikają
     prune: async (slug) => {
       await firestore.collection('articles').doc(slug).update({ status: 'deleted', body: '', lead: '', cover: null, gallery: [], prunedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
