@@ -14,6 +14,7 @@ const hints = ['Co robić w weekend w Częstochowie?', 'Jakie są dziś wydarzen
           <strong>Asystent Częstokocham</strong>
           <span>Pytaj o miasto, wydarzenia i okolicę</span>
         </div>
+        <button class="chat-x" type="button" aria-label="Nowa rozmowa" title="Nowa rozmowa" data-chat-reset hidden><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.4-5.7M4 4v4.5h4.5"/></svg></button>
         <button class="chat-x" type="button" aria-label="Zamknij czat" data-chat-close><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
       </header>
       <div class="chat-log" role="log" aria-live="polite" aria-relevant="additions text" data-chat-log>
@@ -43,8 +44,16 @@ const hints = ['Co robić w weekend w Częstochowie?', 'Jakie są dziś wydarzen
       var input = root.querySelector('[data-chat-input]'), send = root.querySelector('[data-chat-send]');
       var hints = root.querySelector('[data-chat-hints]');
       var KEY = 'ck-chat', history = [], busy = false, ctrl = null;
-      try { history = JSON.parse(sessionStorage.getItem(KEY) || '[]'); } catch (e) {}
-      var save = function () { try { sessionStorage.setItem(KEY, JSON.stringify(history.slice(-20))); } catch (e) {} };
+      // rozmowa trwa przy przechodzeniu między stronami portalu, ale odświeżenie strony albo 30 min ciszy zaczyna ją od nowa
+      var nav = performance.getEntriesByType && performance.getEntriesByType('navigation')[0];
+      try {
+        var saved = JSON.parse(sessionStorage.getItem(KEY) || 'null');
+        if (saved && saved.at > Date.now() - 30 * 60e3 && !(nav && nav.type === 'reload')) history = saved.m || [];
+        else sessionStorage.removeItem(KEY);
+      } catch (e) {}
+      var save = function () { try { sessionStorage.setItem(KEY, JSON.stringify({ at: Date.now(), m: history.slice(-12) })); } catch (e) {} };
+      // do AI idą tylko 3 ostatnie wymiany, a długie odpowiedzi przycięte – mniej tokenów na pytanie
+      var forAi = function () { return history.slice(-6).map(function (m) { return { role: m.role, content: m.role === 'assistant' && m.content.length > 700 ? m.content.slice(0, 700) + '…' : m.content }; }); };
 
       // linki: tylko istniejące strony portalu (lista z /kontekst.json + działy) i nigdy do lokalnej konkurencji
       var SECTIONS = ['/', '/miasto', '/powiat', '/kraj', '/sport', '/wydarzenia', '/szukaj', '/o-nas', '/reklama'];
@@ -81,6 +90,9 @@ const hints = ['Co robić w weekend w Częstochowie?', 'Jakie są dziś wydarzen
           var ext = /^https?:/i.test(u) && !/^https?:\/\/(www\.)?czestokocham\.pl/i.test(u);
           return '<a href="' + esc(u) + '"' + (ext ? ' target="_blank" rel="noopener noreferrer"' : '') + '>' + t + '</a>';
         });
+        // model czasem pisze „**Tytuł** (/wydarzenia/slug)” zamiast linku – zamieniamy na link
+        s = s.replace(/\*\*([^*]+)\*\*\s*\((\/[a-z0-9\/-]+)\)/g, function (m, t, u) { return linkOk(u) ? '<a href="' + u + '"><strong>' + t + '</strong></a>' : '<strong>' + t + '</strong>'; });
+        s = s.replace(/\s?\((\/[a-z0-9\/-]+)\)/g, function (m, u) { return linkOk(u) ? ' (<a href="' + u + '">szczegóły</a>)' : ''; });
         return s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>').replace(/(^|[\s(])\*([^*\s][^*]*?)\*(?=[\s.,;:!?)]|$)/g, '$1$2');
       }
       function render(md) {
@@ -105,8 +117,15 @@ const hints = ['Co robić w weekend w Częstochowie?', 'Jakie są dziś wydarzen
         m.appendChild(b); log.appendChild(m); log.scrollTop = log.scrollHeight;
         return b;
       }
+      var resetBtn = root.querySelector('[data-chat-reset]');
       history.forEach(function (m) { add(m.role, m.content); });
-      if (history.length && hints) hints.hidden = true;
+      if (history.length) { if (hints) hints.hidden = true; resetBtn.hidden = false; }
+      resetBtn.addEventListener('click', function () {
+        if (ctrl) ctrl.abort();
+        history = []; try { sessionStorage.removeItem(KEY); } catch (e) {}
+        [].forEach.call(log.querySelectorAll('.chat-msg'), function (m, i) { if (i) m.remove(); });
+        if (hints) hints.hidden = false; resetBtn.hidden = true; input.focus();
+      });
 
       function open() {
         loadKnown(); panel.hidden = false; fab.setAttribute('aria-expanded', 'true'); root.classList.add('open');
@@ -132,11 +151,11 @@ const hints = ['Co robić w weekend w Częstochowie?', 'Jakie są dziś wydarzen
         if (!q || busy) return;
         busy = true; send.disabled = true; input.value = ''; grow();
         if (hints) hints.hidden = true;
-        add('user', q); history.push({ role: 'user', content: q });
+        add('user', q); history.push({ role: 'user', content: q }); resetBtn.hidden = false;
         var bubble = add('bot', ''); bubble.classList.add('typing'); bubble.innerHTML = '<i></i><i></i><i></i>';
         var text = '';
         ctrl = new AbortController();
-        fetch(api, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ messages: history.slice(-10) }), signal: ctrl.signal })
+        fetch(api, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ messages: forAi() }), signal: ctrl.signal })
           .then(function (res) {
             if (!res.ok) return res.json().catch(function () { return {}; }).then(function (j) { throw new Error(j.error || 'Coś poszło nie tak. Spróbuj ponownie.'); });
             var rd = res.body.getReader(), dec = new TextDecoder(), buf = '';
@@ -201,6 +220,7 @@ const hints = ['Co robić w weekend w Częstochowie?', 'Jakie są dziś wydarzen
   .chat-title { flex: 1; min-width: 0; line-height: 1.25; }
   .chat-title strong { display: block; font-size: 1.0625rem; font-weight: 700; }
   .chat-title span { font-size: 0.8125rem; color: var(--on-navy-soft); }
+  .chat-x[hidden] { display: none; }
   .chat-x { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border: 0; border-radius: 999px; background: rgb(255 255 255 / 0.08); color: #fff; cursor: pointer; transition: background-color 0.2s; }
   .chat-x:hover { background: rgb(255 255 255 / 0.18); }
   .chat-log { flex: 1; overflow-y: auto; overscroll-behavior: contain; padding: 18px 16px 8px; display: flex; flex-direction: column; gap: 12px; scroll-behavior: smooth; }
