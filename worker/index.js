@@ -35,8 +35,8 @@ function pick(ctx, question) {
     return [...scored, ...fresh];
   };
   const news = top(ctx.news || [], (a) => `${a.t} ${a.l} ${a.c}`, 6, 6).map((a) => `- [${a.t}](${a.u}) (${a.c}, ${a.d}): ${a.l}`);
-  const events = top(ctx.events || [], (e) => `${e.t} ${e.y} ${e.p}`, 6, 6).map((e) => `- [${e.t}](${e.u}) – ${e.y}, ${e.p}, ${e.w}`);
-  return `WIEDZA PORTALU (stan na ${ctx.at ? ctx.at.slice(0, 16).replace('T', ' ') : 'nieznany'} UTC)\nWiadomości:\n${news.join('\n') || '(brak)'}\nWydarzenia:\n${events.join('\n') || '(brak)'}`;
+  const events = top(ctx.events || [], (e) => `${e.t} ${e.y} ${e.p}`, 6, 12).map((e) => `- [${e.t}](${e.u}) – ${e.y}, ${e.p}, ${e.w}`);
+  return `WIEDZA PORTALU (stan na ${ctx.at ? ctx.at.slice(0, 16).replace('T', ' ') : 'nieznany'} UTC)\nWiadomości:\n${news.join('\n') || '(brak)'}\nWydarzenia (od najbliższych):\n${events.join('\n') || '(brak)'}`;
 }
 
 async function loadContext(env, ctxWait) {

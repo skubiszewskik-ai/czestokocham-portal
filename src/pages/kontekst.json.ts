@@ -1,7 +1,7 @@
 import type { APIRoute } from 'astro';
 import { allArticles } from '../lib/db';
 import { CATEGORIES, articleUrl } from '../lib/site';
-import { allEvents, eventUrl, whenText } from '../lib/events';
+import { allEvents, eventUrl, today, whenText } from '../lib/events';
 // Wiedza asystenta czatu (worker/index.js): świeże wiadomości i nadchodzące wydarzenia, w skrócie
 export const GET: APIRoute = () => {
   const cut = (s: string, n: number) => (s.length > n ? s.slice(0, n - 1).trimEnd() + '…' : s);
@@ -12,12 +12,12 @@ export const GET: APIRoute = () => {
     d: a.publishedAt.toISOString().slice(0, 10),
     u: articleUrl(a),
   }));
-  const events = allEvents().slice(0, 80).map((e) => ({
-    t: e.title,
-    y: e.type,
-    p: e.place,
-    w: e.dates.slice(0, 4).map(whenText).join('; '),
-    u: eventUrl(e),
-  }));
+  // tylko przyszłe terminy, od najbliższego wydarzenia
+  const events = allEvents()
+    .map((e) => ({ e, dates: e.dates.filter((d) => d.day >= today()) }))
+    .filter((x) => x.dates.length)
+    .sort((a, b) => a.dates[0].day.localeCompare(b.dates[0].day))
+    .slice(0, 80)
+    .map(({ e, dates }) => ({ t: e.title, y: e.type, p: e.place, w: dates.slice(0, 4).map(whenText).join('; '), u: eventUrl(e) }));
   return new Response(JSON.stringify({ at: new Date().toISOString(), news, events }), { headers: { 'content-type': 'application/json' } });
 };
