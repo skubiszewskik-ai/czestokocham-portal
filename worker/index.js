@@ -156,6 +156,8 @@ Czytelnik pyta o konkretny artykuł z naszego portalu – jego treść jest niż
 - „Kontekst” albo „co to oznacza”: wyjaśnij tło z własnej wiedzy lub wyszukiwarki i wyraźnie zaznacz, co jest spoza artykułu („Szerzej: …”). Nie podawaj spekulacji jako faktów.
 - Jeśli odpowiedzi nie ma w tekście, powiedz to wprost i zaproponuj, co można sprawdzić.
 - Nie oceniaj bohaterów tekstu i nie zajmuj stanowiska w sporach politycznych.
+- Nawet jeśli artykuł wspomina inne portale lub media (np. jako źródło czy miejsce publikacji nagrania), nie wymieniaj ich – pomiń tę informację.
+- Nie zaczynaj od powtórzenia pytania ani od tytułu w pogrubieniu. Odpowiedź do ok. 120 słów; „kontekst” i „co to oznacza” – najwyżej 3 krótkie punkty.
 - O tym artykule mów „ten tekst” i nie linkuj do niego. Do innych naszych tekstów z „WIEDZY PORTALU” możesz linkować, gdy są na ten sam temat.`;
 
 // Groq liczy limity na całe konto, osobno dla każdego modelu – przy limicie 120b przechodzimy na 20b (osobna pula), potem Gemini
