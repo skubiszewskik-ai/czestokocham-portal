@@ -112,7 +112,7 @@ if (args.has('--redaktor') || build.redaktorRequested) {
     },
   };
   const cfg = (await firestore.collection('config').doc('redaktor').get()).data() || {};
-  redaktorResult = await runRedaktor(store, { days: 7, maxDrafts: Number(process.env.REDAKTOR_MAX || 6), keep: 30, aiImages: !!cfg.aiImages, log })
+  redaktorResult = await runRedaktor(store, { days: 7, maxDrafts: Number(process.env.REDAKTOR_MAX || 6), keep: 30, aiImages: !!cfg.aiImages, deadline: t0 + Number(process.env.REDAKTOR_MINUTES || 20) * 60e3, log })
     .catch((e) => ({ checked: 0, drafts: [], skipped: [], duplicates: 0, errors: [e.message], pruned: [] }));
   await firestore.collection('redaktor_runs').add({ ...redaktorResult, trigger: build.redaktorRequested ? 'manual' : 'schedule', at: FieldValue.serverTimestamp() });
   log(`redaktor: nowych szkiców ${redaktorResult.drafts.length}, pominiętych ${redaktorResult.skipped.length}, powtórek ${redaktorResult.duplicates}, błędów ${redaktorResult.errors.length}`);

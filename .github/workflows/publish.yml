@@ -46,7 +46,7 @@ jobs:
     needs: check
     if: (github.event_name == 'workflow_dispatch' && inputs.mode != 'auto') || needs.check.outputs.run != 'none'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 50
     permissions:
       contents: write
     steps:
