@@ -10,6 +10,8 @@ GROQ_MODEL = "openai/gpt-oss-120b"
 WEB_SEARCH = "1"
 # głos lektora (Gemini TTS): Sulafat – ciepły, Aoede – lżejszy, Charon – męski
 TTS_VOICE = "Sulafat"
+# panel redakcji (/redakcja): kto może używać AI przez Workera – jak config/admins w Firestore
+EDITORS = "skubiszewskik@gmail.com,czestokocham@gmail.com"
 
 # limit zapytań na adres IP (darmowy binding Cloudflare)
 [[ratelimits]]

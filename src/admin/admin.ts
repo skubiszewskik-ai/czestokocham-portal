@@ -7,8 +7,8 @@ import {
 } from 'firebase/firestore';
 import { firebaseConfig } from '../lib/firebase-config';
 import { SLOTS, type SlotKey } from '../lib/slots';
-import { CATEGORIES } from '../lib/site';
-import { generate, rewrite, titles as aiTitles, EDIT_LABELS, type Keys, type Mode, type Draft } from './ai';
+import { CATEGORIES, SITE } from '../lib/site';
+import { generate, rewrite, titles as aiTitles, naczelnyCheck, naczelnyFix, fetchArticle, wordCount, EDIT_LABELS, type Keys, type Mode, type Draft, type Verdict, type CheckCtx } from './ai';
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -338,6 +338,9 @@ $('#a-more').addEventListener('click', () => loadArticles());
 $('#a-new').addEventListener('click', () => openEditor(null));
 
 // ---------------- edytor ----------------
+// wynik naczelnego dla bieżącej wersji tekstu i pobrane źródło (redaktor naczelny w edytorze – niżej)
+let lastCheck: { key: string; v: Verdict } | null = null;
+let srcCache: Promise<{ text: string; name: string; title: string } | null> | null = null;
 let current: { id: string | null; cover: Img | null; gallery: Img[]; data: any; imageSource: string | null } = { id: null, cover: null, gallery: [], data: {}, imageSource: null };
 const form = $('#e-form') as HTMLFormElement;
 const F = (n: string) => form.elements.namedItem(n) as HTMLInputElement;
@@ -348,6 +351,8 @@ async function openEditor(id: string | null) {
   form.reset();
   current = { id, cover: null, gallery: [], data: {}, imageSource: null };
   if (id) current.data = (await getDoc(doc(db, 'articles', id))).data() || {};
+  lastCheck = null; srcCache = null;
+  renderCheck(current.data.review?.by === 'panel' ? null : current.data.review);
   const d = current.data;
   show('editor');
   $('#e-h').textContent = id ? 'Edycja artykułu' : 'Nowy artykuł';
@@ -396,7 +401,17 @@ function updateView() {
 F('title').addEventListener('input', () => { grow(); if (!current.id) F('slug').value = slugify(F('title').value); });
 F('category').addEventListener('change', () => ($('#slug-cat').textContent = F('category').value));
 $('#e-back').addEventListener('click', () => show(current.data.origin === 'redaktor' && current.data.status === 'draft' ? 'redaktor' : 'articles'));
-$('#e-approve').addEventListener('click', () => {
+$('#e-approve').addEventListener('click', async () => {
+  // naczelny sprawdza tekst przed publikacją (chyba że ta wersja już przeszła jego kontrolę)
+  if (lastCheck?.key !== textKey() || lastCheck.v.verdict !== 'publish') {
+    const v = await runCheck();
+    if (!v) return;
+    if (v.verdict !== 'publish') {
+      const pick = await pickBox(`Naczelny: ${VERDICT[v.verdict]} – ${v.problems[0] || 'wymaga poprawy'}`, ['Napraw przez naczelnego', 'Opublikuj mimo to']);
+      if (pick === 'Napraw przez naczelnego') return runFix();
+      if (pick !== 'Opublikuj mimo to') return;
+    }
+  }
   F('status').value = 'published';
   F('publishedAt').value = localInput(new Date());
   $('#e-approve').hidden = true;
@@ -1088,7 +1103,12 @@ F('lead').addEventListener('input', keepDraft);
 // ---------------- AI: napisz artykuł, popraw tekst ----------------
 let aiKeys: Keys | null = null;
 async function keys(): Promise<Keys> {
-  if (!aiKeys) { const d = (await getDoc(doc(db, 'config', 'ai'))).data() || {}; aiKeys = { gemini: d.gemini || '', groq: d.groq || '' }; }
+  if (!aiKeys) {
+    const d = (await getDoc(doc(db, 'config', 'ai'))).data() || {};
+    // Worker czatu ma własne klucze Gemini i Groq – przepustką jest token zalogowanego redaktora
+    const proxy = SITE.chatApi ? { url: SITE.chatApi, token: () => auth.currentUser!.getIdToken() } : undefined;
+    aiKeys = { gemini: d.gemini || '', groq: d.groq || '', proxy };
+  }
   return aiKeys;
 }
 let genMode: Mode = 'topic';
@@ -1181,15 +1201,71 @@ $$('[data-ai]').forEach((b) => b.addEventListener('click', async () => {
       const t = list.length ? await pickBox('Wybierz tytuł', list) : null;
       if (t) { F('title').value = t; grow(); if (!current.id) F('slug').value = slugify(t); keepDraft(); }
     } else {
-      const r = await rewrite(kind, a, await keys());
+      const r = await rewrite(kind, a, await keys(), kind === 'longer' ? { source: (await checkCtx()).source, step: (t) => ($('#rte-saved').textContent = `AI: ${t}`) } : {});
       F('title').value = r.title; F('lead').value = r.lead; grow();
       replaceBody(cleanHtml(r.body));
-      toast(`${label} – gotowe. ⌘Z w treści cofa zmianę.`);
+      toast(`${label} – gotowe${kind === 'longer' ? ` (${wordCount(r.body)} słów)` : ''}. ⌘Z w treści cofa zmianę.`);
     }
   } catch (err: any) { toast(err.message, true); }
   $('#rte-saved').textContent = '';
   aiBtn.classList.remove('busy'); aiBtn.removeAttribute('disabled');
 }));
+
+// ---------------- redaktor naczelny w edytorze ----------------
+const VERDICT: Record<string, string> = { publish: 'gotowy do publikacji', hold: 'do poprawy', reject: 'do odrzucenia' };
+const textKey = () => `${F('title').value.trim()}\n${F('lead').value.trim()}\n${bodyHtml()}`;
+/** Źródło tekstu (artykuł, na którym oparto szkic) – pobrane raz na otwarcie edytora */
+async function checkCtx(step?: (t: string) => void): Promise<CheckCtx> {
+  const base = current.data.basedOn?.url ? current.data.basedOn : current.data.source?.url ? current.data.source : null;
+  if (base && !srcCache) srcCache = fetchArticle(base.url).then((p) => (p ? { text: p.text, name: base.name || p.site, title: base.title || p.title } : null));
+  const [src, recent] = await Promise.all([
+    srcCache,
+    getDocs(query(collection(db, 'articles'), where('publishedAt', '>=', Timestamp.fromMillis(Date.now() - 4 * 864e5)))).catch(() => null),
+  ]);
+  const ours = (recent?.docs || []).filter((d) => d.id !== current.id && d.get('status') === 'published').map((d) => ({ slug: d.id, title: String(d.get('title') || '') }));
+  return { source: src?.text, sourceName: src?.name, sourceTitle: src?.title, ours, step };
+}
+function renderCheck(v: (Partial<Verdict> & { verdict?: string }) | null, note = '') {
+  const box = $('#e-nacz-r');
+  if (!v?.verdict) { box.hidden = true; box.innerHTML = ''; return; }
+  box.hidden = false;
+  const cls = v.verdict === 'publish' ? 'on' : v.verdict === 'reject' ? 'reject' : 'off';
+  box.innerHTML = `<span class="pill nacz-v ${cls}">${esc(VERDICT[v.verdict] || v.verdict)}</span>
+    ${(v.problems || []).length ? `<ul>${(v.problems || []).map((p) => `<li>${esc(p)}</li>`).join('')}</ul>` : '<span>Bez uwag.</span>'}
+    <span class="meta">${[v.words != null ? `${v.words} słów` : '', v.copy != null ? `podobieństwo do źródła ${Math.round(v.copy * 100)}%` : '', note].filter(Boolean).join(' · ')}</span>`;
+}
+function naczBusy(on: boolean, text = '') {
+  ['#e-check', '#e-fix', '#e-approve'].forEach((s) => ($(s) as HTMLButtonElement).disabled = on);
+  $('#e-nacz-t').textContent = on ? text : 'Sprawdza tekst tak jak przed automatyczną publikacją: fakty ze źródłem, podobieństwo do źródła (do 20%), długość, aktualność, powtórki tematów i wzmianki o innych mediach.';
+}
+async function runCheck(): Promise<Verdict | null> {
+  const a = { title: F('title').value.trim(), lead: F('lead').value.trim(), body: bodyHtml() };
+  if (!a.body) { toast('Najpierw napisz treść.', true); return null; }
+  naczBusy(true, 'Naczelny czyta tekst i źródło…');
+  try {
+    const v = await naczelnyCheck(a, await keys(), await checkCtx());
+    lastCheck = { key: textKey(), v };
+    renderCheck(v, (await checkCtx()).source ? '' : 'źródło niedostępne – bez porównania');
+    return v;
+  } catch (err: any) { toast(err.message, true); return null; }
+  finally { naczBusy(false); }
+}
+async function runFix() {
+  const a = { title: F('title').value.trim(), lead: F('lead').value.trim(), body: bodyHtml() };
+  if (!a.body) return toast('Najpierw napisz treść.', true);
+  naczBusy(true, 'Naczelny poprawia tekst…');
+  try {
+    const { text, check } = await naczelnyFix(a, await keys(), await checkCtx((t) => naczBusy(true, t)));
+    F('title').value = text.title; F('lead').value = text.lead; grow();
+    replaceBody(cleanHtml(text.body));
+    lastCheck = { key: textKey(), v: check };
+    renderCheck(check);
+    toast(check.verdict === 'publish' ? 'Naczelny poprawił tekst – gotowy do publikacji. Zapisz albo zatwierdź.' : 'Naczelny poprawił, ale nadal ma uwagi – zobacz listę.', check.verdict !== 'publish');
+  } catch (err: any) { toast(err.message, true); }
+  finally { naczBusy(false); }
+}
+$('#e-check').addEventListener('click', () => { runCheck(); });
+$('#e-fix').addEventListener('click', () => { runFix(); });
 
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -1218,6 +1294,8 @@ form.addEventListener('submit', async (e) => {
     needsPhoto: !current.cover && (!!current.data.needsPhoto || current.data.origin === 'redaktor'),
     gallery: current.gallery,
     keywords: keywordsFor(title, lead),
+    // wynik naczelnego dla zapisywanej wersji – automat nie sprawdza jej drugi raz, ostrzeżenie o podobieństwie znika
+    ...(lastCheck && lastCheck.key === textKey() ? { review: { verdict: lastCheck.v.verdict, problems: lastCheck.v.problems, provider: lastCheck.v.provider, by: 'panel', at: Timestamp.now() }, copyRisk: lastCheck.v.copy !== null && lastCheck.v.copy > 0.2 ? Math.round(lastCheck.v.copy * 100) : null } : {}),
     updatedAt: serverTimestamp(),
   };
   const btn = $('#e-save') as HTMLButtonElement;

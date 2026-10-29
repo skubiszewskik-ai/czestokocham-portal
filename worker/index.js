@@ -50,7 +50,7 @@ PEWNE FAKTY O MIEŚCIE (nie przekręcaj tych nazw)
 const cors = (req) => {
   const o = req.headers.get('Origin') || '';
   const ok = ORIGINS.some((r) => r.test(o));
-  return { 'Access-Control-Allow-Origin': ok ? o : 'null', 'Access-Control-Allow-Methods': 'POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type', 'Access-Control-Max-Age': '86400', Vary: 'Origin', ok };
+  return { 'Access-Control-Allow-Origin': ok ? o : 'null', 'Access-Control-Allow-Methods': 'POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, Authorization', 'Access-Control-Max-Age': '86400', Vary: 'Origin', ok };
 };
 const json = (obj, status, h) => new Response(JSON.stringify(obj), { status, headers: { 'content-type': 'application/json; charset=utf-8', ...h } });
 
@@ -320,6 +320,80 @@ async function saveBrief(stream, key) {
   if (text.length > 200) await caches.default.put(key, new Response(sse(text), { headers: { 'content-type': 'text/event-stream', 'Cache-Control': 'public, max-age=3600' } }));
 }
 
+// --- Redakcja: AI dla panelu (/redakcja) – te same darmowe klucze co czat, ale tylko dla zalogowanych redaktorów.
+// Panel wysyła token logowania Firebase; sprawdzamy podpis kluczami Google i adres e-mail z listy EDITORS.
+const FB_PROJECT = 'czestokocham';
+const RED_MAX = 60000;
+let jwks = null;
+let jwksAt = 0;
+const b64u = (x) => Uint8Array.from(atob(x.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(x.length / 4) * 4, '=')), (c) => c.charCodeAt(0));
+async function editor(req, env) {
+  const [h, p, s] = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '').split('.');
+  if (!s) return null;
+  try {
+    const head = JSON.parse(new TextDecoder().decode(b64u(h)));
+    const pay = JSON.parse(new TextDecoder().decode(b64u(p)));
+    if (head.alg !== 'RS256' || pay.aud !== FB_PROJECT || pay.iss !== `https://securetoken.google.com/${FB_PROJECT}` || pay.exp * 1000 < Date.now() || !pay.email_verified) return null;
+    if (!jwks || Date.now() - jwksAt > 3600e3) {
+      jwks = (await (await fetch('https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com')).json()).keys || [];
+      jwksAt = Date.now();
+    }
+    const jwk = jwks.find((k) => k.kid === head.kid);
+    if (!jwk) return null;
+    const key = await crypto.subtle.importKey('jwk', jwk, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']);
+    if (!(await crypto.subtle.verify('RSASSA-PKCS1-v1_5', key, b64u(s), new TextEncoder().encode(`${h}.${p}`)))) return null;
+    const email = String(pay.email || '').toLowerCase();
+    return (env.EDITORS || '').toLowerCase().split(',').map((x) => x.trim()).includes(email) ? email : null;
+  } catch { return null; }
+}
+
+// redakcja: najpierw Gemini (lepiej trzyma długość i polszczyznę), potem Groq – każdy model ma osobną pulę limitów
+function redProviders(env) {
+  const list = [];
+  if (env.GEMINI_API_KEY) for (const model of [env.GEMINI_MODEL || 'gemini-3.5-flash', 'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite']) {
+    list.push({ name: `gemini ${model}`, url: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', key: env.GEMINI_API_KEY, model, extra: { reasoning_effort: model.includes('lite') ? 'minimal' : 'low' } });
+  }
+  if (env.GROQ_API_KEY) for (const model of [env.GROQ_MODEL || 'openai/gpt-oss-120b', 'openai/gpt-oss-20b']) {
+    list.push({ name: `groq ${model}`, url: 'https://api.groq.com/openai/v1/chat/completions', key: env.GROQ_API_KEY, model, extra: { reasoning_effort: 'low' } });
+  }
+  return list;
+}
+const parseObj = (t) => {
+  const x = String(t || '').trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '');
+  try { return JSON.parse(x); } catch {}
+  const a = x.indexOf('{');
+  const b = x.lastIndexOf('}');
+  return a >= 0 && b > a ? JSON.parse(x.slice(a, b + 1)) : null;
+};
+async function redakcja(req, env, ch) {
+  const who = await editor(req, env);
+  if (!who) return json({ error: 'Brak dostępu – zaloguj się ponownie w panelu.' }, 401, ch);
+  if (env.LIMITER && !(await env.LIMITER.limit({ key: `red:${who}` })).success) return json({ error: 'Za dużo zapytań naraz – spróbuj za chwilę.' }, 429, ch);
+  let b;
+  try { b = await req.json(); } catch { return json({ error: 'Błędne zapytanie.' }, 400, ch); }
+  const system = String(b.system || '').slice(0, RED_MAX);
+  const user = String(b.user || '').slice(0, RED_MAX);
+  if (!system || !user) return json({ error: 'Brak treści zapytania.' }, 400, ch);
+  const temperature = Math.min(1, Math.max(0, Number(b.temperature ?? 0.5)));
+  const errors = [];
+  for (const p of redProviders(env)) {
+    try {
+      const res = await fetch(p.url, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${p.key}` },
+        body: JSON.stringify({ model: p.model, temperature, max_tokens: 8000, response_format: { type: 'json_object' }, ...p.extra, messages: [{ role: 'system', content: system }, { role: 'user', content: user }] }),
+        signal: AbortSignal.timeout(100000),
+      });
+      if (!res.ok) { errors.push(`${p.name} ${res.status}`); continue; }
+      const data = parseObj((await res.json()).choices?.[0]?.message?.content);
+      if (data) return json({ data, provider: p.name.split(' ')[0], model: p.model }, 200, ch);
+      errors.push(`${p.name} zła odpowiedź`);
+    } catch (e) { errors.push(`${p.name} ${e.message}`); }
+  }
+  console.log('redakcja: wszyscy dostawcy zawiedli', errors.join(' | '));
+  return json({ error: `AI chwilowo niedostępne (${errors.slice(-3).join(', ')})` }, 503, ch);
+}
+
 export default {
   async fetch(req, env, ctx) {
     const h = cors(req);
@@ -327,8 +401,9 @@ export default {
     if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: ch });
     const path = new URL(req.url).pathname;
     if (path === '/' || path === '/health') return json({ ok: true, service: 'czestokocham-czat' }, 200, ch);
-    if ((path !== '/chat' && path !== '/tts') || req.method !== 'POST') return json({ error: 'Nie znaleziono.' }, 404, ch);
+    if ((path !== '/chat' && path !== '/tts' && path !== '/redakcja') || req.method !== 'POST') return json({ error: 'Nie znaleziono.' }, 404, ch);
     if (!ok) return json({ error: 'Niedozwolone źródło.' }, 403, ch);
+    if (path === '/redakcja') return redakcja(req, env, ch);
 
     if (env.LIMITER) {
       const ip = req.headers.get('CF-Connecting-IP') || 'x';

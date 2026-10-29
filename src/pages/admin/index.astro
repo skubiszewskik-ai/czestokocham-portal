@@ -239,6 +239,12 @@ const ic = (k: keyof typeof I) => `<svg viewBox="0 0 24 24" width="20" height="2
                     <p id="e-ai-t"></p>
                     <button type="button" class="btn red wide" id="e-approve"><Fragment set:html={ic('check')} /> Zatwierdź i opublikuj</button>
                   </div>
+                  <div class="card nacz" id="e-nacz">
+                    <h2 class="ch"><Fragment set:html={ic('spark')} /> Redaktor naczelny AI</h2>
+                    <p class="hint" id="e-nacz-t">Sprawdza tekst tak jak przed automatyczną publikacją: fakty ze źródłem, podobieństwo do źródła (do 20%), długość, aktualność, powtórki tematów i wzmianki o innych mediach.</p>
+                    <div id="e-nacz-r" class="nacz-r" hidden></div>
+                    <div class="nacz-b"><button type="button" class="btn ghost" id="e-check"><Fragment set:html={ic('check')} /> Sprawdź</button><button type="button" class="btn ghost" id="e-fix"><Fragment set:html={ic('spark')} /> Napraw</button></div>
+                  </div>
                   <div class="card">
                     <h2 class="ch">Publikacja</h2>
                     <label>Status<select name="status"><option value="published">Opublikowany</option><option value="draft">Szkic</option></select></label>
@@ -755,6 +761,15 @@ const ic = (k: keyof typeof I) => `<svg viewBox="0 0 24 24" width="20" height="2
   .bank button { position: absolute; top: 6px; right: 6px; border: 0; background: rgb(17 19 38 / 0.8); color: #fff; cursor: pointer; width: 28px; height: 28px; border-radius: 8px; font-size: 16px; }
   .bank button:hover { background: var(--red); }
   .ai-note { background: #f6f1fe; }
+  .nacz .ch { display: flex; align-items: center; gap: 8px; }
+  .nacz .ch svg { width: 18px; height: 18px; }
+  .nacz-r { display: grid; gap: 8px; margin: 4px 0 12px; font-size: 14px; }
+  .nacz-r ul { margin: 0; padding-left: 18px; color: var(--ink-2); display: grid; gap: 4px; }
+  .nacz-r .meta { color: var(--ink-soft); font-size: 13px; }
+  .nacz-v { justify-self: start; }
+  .nacz-v.reject { background: #fde4e5; color: #9b0f16; }
+  .nacz-b { display: flex; flex-wrap: wrap; gap: 8px; }
+  .nacz-b .btn { flex: 1; min-height: 40px; }
   .ai-note .ch { display: flex; align-items: center; gap: 8px; color: #4c1d95; }
   .ai-note .ch svg { width: 18px; height: 18px; }
   .ai-note p { font-size: 14px; color: var(--ink-2); }
