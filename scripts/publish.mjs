@@ -73,8 +73,10 @@ if (args.has('--redaktor') || build.redaktorRequested) {
   let cityCache = null;
   const store = {
     recent: async (since) =>
-      (await firestore.collection('articles').where('publishedAt', '>=', since).select('title', 'lead', 'body', 'status').get())
-        .docs.map((d) => ({ slug: d.id, ...d.data() })).sort((a, b) => (a.status === 'deleted') - (b.status === 'deleted')),
+      (await firestore.collection('articles').where('publishedAt', '>=', since).select('title', 'lead', 'body', 'status', 'origin').get())
+        // nieopublikowane przedruki z importu nie zajmują tematu – redaktor może napisać o tym własny tekst
+        .docs.map((d) => ({ slug: d.id, ...d.data() })).filter((a) => !(a.origin === 'import' && a.status === 'draft'))
+        .sort((a, b) => (a.status === 'deleted') - (b.status === 'deleted')),
     seen: async (keys) => {
       const out = new Set();
       for (let i = 0; i < keys.length; i += 100) {
@@ -100,7 +102,7 @@ if (args.has('--redaktor') || build.redaktorRequested) {
     // archiwum zdjęć miasta: zaimportowane aktualności czestochowa.pl (jedno zapytanie na uruchomienie)
     cityArticles: async () => (cityCache ||= (await firestore.collection('articles').where('source.name', '==', 'czestochowa.pl')
       .select('title', 'lead', 'cover', 'gallery', 'photoCredit', 'publishedAt', 'status').get()).docs
-      .map((d) => ({ slug: d.id, ...d.data() })).filter((a) => a.status === 'published')
+      .map((d) => ({ slug: d.id, ...d.data() })).filter((a) => a.status !== 'deleted')
       .sort((a, b) => (b.publishedAt?.toMillis?.() || 0) - (a.publishedAt?.toMillis?.() || 0))),
     pending: async () =>
       (await firestore.collection('articles').where('origin', '==', 'redaktor').where('status', '==', 'draft').select('publishedAt', 'keep').get())
