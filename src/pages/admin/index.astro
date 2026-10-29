@@ -322,10 +322,17 @@ const ic = (k: keyof typeof I) => `<svg viewBox="0 0 24 24" width="20" height="2
               <span class="qa-i violet big"><Fragment set:html={ic('spark')} /></span>
               <div class="grow">
                 <h2>Wirtualny redaktor</h2>
-                <p>Co 2 godziny (7:00–21:00) sprawdza lokalne portale. Z nowych tematów pisze <strong>własne teksty</strong> na podstawie faktów i zostawia je tutaj jako szkice. Nic nie trafia na stronę bez Twojej akceptacji. Czeka najwyżej 30 propozycji – gdy przybywa nowych, najstarsze nieprzejrzane są usuwane razem ze zdjęciami. Pomija reklamy, tematy spoza regionu i wiadomości, które już mamy (np. z czestochowa.pl). Zdjęć konkurencji nie używa: bierze zdjęcie z banku poniżej, z Wikimedia Commons (z podpisem autora) albo robi planszę z tytułem.</p>
+                <p>Co 2 godziny (7:00–21:00) sprawdza lokalne portale. Z nowych tematów pisze <strong>własne teksty</strong> na podstawie faktów. Potem szkice przegląda <strong>redaktor naczelny AI</strong> (gdy jest włączony – niżej): gotowe publikuje sam, wątpliwe zostawia tutaj z opisem, co poprawić. Czeka najwyżej 30 propozycji – gdy przybywa nowych, najstarsze nieprzejrzane są usuwane razem ze zdjęciami. Pomija reklamy, tematy spoza regionu i wiadomości, które już mamy (np. z czestochowa.pl). Zdjęć konkurencji nie używa: bierze zdjęcie z banku poniżej, z Wikimedia Commons (z podpisem autora) albo robi planszę z tytułem.</p>
                 <p class="hint" id="red-last">Ostatnie uruchomienie: –</p>
               </div>
               <button id="red-run" class="btn red"><Fragment set:html={ic('bolt')} /> Uruchom teraz</button>
+            </div>
+
+            <div class="card">
+              <h2 class="ch">Redaktor naczelny AI</h2>
+              <label class="switch"><input id="red-auto" type="checkbox" /><span class="sw"></span> Sprawdzaj szkice i publikuj gotowe automatycznie</label>
+              <p class="hint">Po każdej pracy redaktora (co ~2 godziny) AI porównuje szkic ze źródłem: fakty, aktualność, powtórki tematów i wzmianki o innych mediach – drobne błędy poprawia sam. Gemini ogląda zdjęcie główne; gdy nie pasuje albo jest ilustracją AI, wybiera lepsze z archiwum miasta, Wikipedii, Wikimedia Commons i banków zdjęć. Gotowe teksty trafiają na stronę co 45–65 minut między 7:00 a 22:00 (najwyżej 16 dziennie), pilne – ostrzeżenia, utrudnienia, zaginięcia – od razu. Teksty o konkretnych osobach bez ich prawdziwego zdjęcia, sprawy drażliwe i wątpliwe fakty zostają do Twojej decyzji.</p>
+              <div id="red-plan" class="rlist"></div>
             </div>
 
             <div class="card flush">
@@ -352,7 +359,7 @@ const ic = (k: keyof typeof I) => `<svg viewBox="0 0 24 24" width="20" height="2
 
             <div class="card flush">
               <div class="card-h pad"><h2>Historia</h2></div>
-              <table class="tbl"><thead><tr><th>Kiedy</th><th>Nowych wpisów</th><th>Szkice</th><th>Pominięte</th><th>Powtórki</th><th>Błędy</th></tr></thead><tbody id="red-hist"></tbody></table>
+              <table class="tbl"><thead><tr><th>Kiedy</th><th>Nowych wpisów</th><th>Szkice</th><th>Pominięte</th><th>Powtórki</th><th>Opublikował naczelny</th><th>Błędy</th></tr></thead><tbody id="red-hist"></tbody></table>
             </div>
           </section>
 
@@ -736,6 +743,11 @@ const ic = (k: keyof typeof I) => `<svg viewBox="0 0 24 24" width="20" height="2
   .rcard-a { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
   .rcard-a .btn { min-height: 38px; font-size: 14px; }
   .pill.ai { background: #ede5fb; color: #4c1d95; }
+  .rcard-why { font-size: 13.5px; color: #92400e; }
+  .plan { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid #eef0f4; font-size: 14.5px; }
+  .plan time { font-weight: 700; min-width: 108px; color: var(--ink-2); }
+  .plan span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .plan .btn { min-height: 34px; font-size: 13.5px; }
   .bank { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
   .bank figure { position: relative; border-radius: 12px; overflow: hidden; background: #eef0f4; }
   .bank img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; display: block; }

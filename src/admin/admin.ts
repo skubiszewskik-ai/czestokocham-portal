@@ -1397,6 +1397,8 @@ async function loadRedaktor() {
     getDocs(collection(db, 'photos')),
   ]);
   ($('#red-ai') as HTMLInputElement).checked = !!cfg.data()?.aiImages;
+  ($('#red-auto') as HTMLInputElement).checked = cfg.data()?.autoPublish !== false;
+  loadPlan();
   const list = drafts.docs.map((d) => ({ id: d.id, d: d.data() as any })).sort((a, b) => +(toDate(b.d.publishedAt) || 0) - +(toDate(a.d.publishedAt) || 0));
   $('#red-count').textContent = list.length ? `${list.length} do przejrzenia` : '';
   $('#red-list').innerHTML = list.map(({ id, d }) => {
@@ -1404,9 +1406,10 @@ async function loadRedaktor() {
     return `<div class="rcard" data-rid="${esc(id)}">
       <span class="rcard-img" style="${img ? `background-image:url('${esc(src(img))}')` : ''}"></span>
       <div class="rcard-b">
-        <span class="rcard-m">${tagHtml(d.category)}<span>${fmt(toDate(d.publishedAt))}</span><span>· na podstawie <a href="${esc(d.basedOn?.url)}" target="_blank" rel="noopener">${esc(d.basedOn?.name)}</a></span><span>· zdjęcie: ${esc(IMG_SRC[d.imageSource] || '—')}</span>${!d.cover ? `<span class="pill off" title="Otwórz szkic i dodaj zdjęcie główne">${d.ai?.person?.name ? 'brak zdjęcia osoby' : 'brak zdjęcia'}</span>` : ''}${d.copyRisk ? `<span class="pill off" title="Tyle zwrotów pokrywa się ze źródłem – przeredaguj przed publikacją">podobny do źródła ${d.copyRisk}%</span>` : ''}</span>
+        <span class="rcard-m">${tagHtml(d.category)}<span>${fmt(toDate(d.publishedAt))}</span><span>· na podstawie <a href="${esc(d.basedOn?.url)}" target="_blank" rel="noopener">${esc(d.basedOn?.name)}</a></span><span>· zdjęcie: ${esc(IMG_SRC[d.imageSource] || '—')}</span>${!d.cover ? `<span class="pill off" title="Otwórz szkic i dodaj zdjęcie główne">${d.ai?.person?.name ? 'brak zdjęcia osoby' : 'brak zdjęcia'}</span>` : ''}${d.copyRisk ? `<span class="pill off" title="Tyle zwrotów pokrywa się ze źródłem – przeredaguj przed publikacją">podobny do źródła ${d.copyRisk}%</span>` : ''}${d.review?.verdict === 'hold' ? '<span class="pill off">wstrzymany przez naczelnego</span>' : ''}</span>
         <span class="rcard-t">${esc(d.title)}</span>
         <span class="rcard-l">${esc(d.lead)}</span>
+        ${d.review?.verdict === 'hold' ? `<span class="rcard-why">Naczelny AI: ${esc((d.review.problems || []).join('; ') || 'wymaga sprawdzenia')}</span>` : ''}
         <span class="rcard-a">
           <button class="btn ghost" data-act="open" type="button">Edytuj</button>
           <button class="btn red" data-act="pub" type="button">Opublikuj</button>
@@ -1439,8 +1442,10 @@ async function loadRedaktor() {
     const x = r.data();
     const err = (x.errors || []).length;
     const sk = (x.skipped || []).length;
-    return `<tr><td>${fmt(toDate(x.at))}${x.trigger === 'manual' ? ' · ręcznie' : ''}</td><td>${x.checked ?? 0}</td><td><strong>${(x.drafts || []).length}</strong></td><td>${sk ? `<span title="${esc((x.skipped || []).join('\n'))}">${sk}</span>` : '0'}</td><td>${x.duplicates ?? 0}</td><td>${err ? `<span class="pill off" title="${esc((x.errors || []).join('; '))}">${err}</span>` : '—'}</td></tr>`;
-  }).join('') || '<tr><td colspan="6">Redaktor jeszcze nie pracował.</td></tr>';
+    const nz = x.naczelny;
+    const nzTip = nz ? [...(nz.published || []).map((t: string) => `✓ ${t}`), ...(nz.held || []).map((t: string) => `? ${t}`), ...(nz.rejected || []).map((t: string) => `✗ ${t}`)].join('\n') : '';
+    return `<tr><td>${fmt(toDate(x.at))}${x.trigger === 'manual' ? ' · ręcznie' : ''}</td><td>${x.checked ?? 0}</td><td><strong>${(x.drafts || []).length}</strong></td><td>${sk ? `<span title="${esc((x.skipped || []).join('\n'))}">${sk}</span>` : '0'}</td><td>${x.duplicates ?? 0}</td><td>${nz ? `<span title="${esc(nzTip)}"><strong>${(nz.published || []).length}</strong> · wstrzymane ${(nz.held || []).length} · odrzucone ${(nz.rejected || []).length}</span>` : '—'}</td><td>${err ? `<span class="pill off" title="${esc((x.errors || []).join('; '))}">${err}</span>` : '—'}</td></tr>`;
+  }).join('') || '<tr><td colspan="7">Redaktor jeszcze nie pracował.</td></tr>';
   const last = runs.docs[0]?.data();
   $('#red-last').textContent = last
     ? `Ostatnie uruchomienie: ${fmt(toDate(last.at))} – nowe szkice: ${(last.drafts || []).length}${(last.errors || []).length ? `, problem: ${(last.errors || [])[0]}` : ''}`
@@ -1475,6 +1480,29 @@ $('#bank-in').addEventListener('change', async (e) => {
   (e.target as HTMLInputElement).value = '';
   if (ok) { await markDirty(); toast(`Dodano do banku: ${ok}`); }
   loadRedaktor();
+});
+// teksty zaplanowane przez redaktora naczelnego – można je wstrzymać przed publikacją
+async function loadPlan() {
+  const snap = await getDocs(query(collection(db, 'articles'), where('publishedAt', '>', Timestamp.now()), orderBy('publishedAt'), limit(40)));
+  const list = snap.docs.map((d) => ({ id: d.id, d: d.data() as any })).filter((x) => x.d.status === 'published' && x.d.autoPublished);
+  $('#red-plan').innerHTML = list.length
+    ? `<p class="hint">Zaplanowane (${list.length}):</p>` + list.map(({ id, d }) => `<div class="plan" data-pid="${esc(id)}"><time>${fmt(toDate(d.publishedAt))}</time><span title="${esc(d.title)}">${esc(d.title)}</span><button class="btn ghost" data-act="open" type="button">Edytuj</button><button class="btn ghost danger" data-act="stop" type="button">Wstrzymaj</button></div>`).join('')
+    : '<p class="hint">Nic nie czeka w kolejce publikacji.</p>';
+  $$('#red-plan [data-act]').forEach((b) => b.addEventListener('click', async () => {
+    const id = b.closest<HTMLElement>('[data-pid]')!.dataset.pid!;
+    if (b.dataset.act === 'open') return openEditor(id);
+    try {
+      await updateDoc(doc(db, 'articles', id), { status: 'draft', keep: true, review: { verdict: 'hold', problems: ['wstrzymany ręcznie'], at: Timestamp.now() }, updatedAt: serverTimestamp() });
+      toast('Wstrzymano – tekst wrócił do szkiców.');
+      loadRedaktor();
+    } catch (err: any) { toast(err.message, true); }
+  }));
+}
+$('#red-auto').addEventListener('change', async (e) => {
+  try {
+    await setDoc(doc(db, 'config', 'redaktor'), { autoPublish: (e.target as HTMLInputElement).checked }, { merge: true });
+    toast((e.target as HTMLInputElement).checked ? 'Redaktor naczelny AI włączony – gotowe teksty będą publikowane automatycznie' : 'Redaktor naczelny AI wyłączony – szkice czekają na Ciebie');
+  } catch (err: any) { toast(err.message, true); }
 });
 $('#red-ai').addEventListener('change', async (e) => {
   try {

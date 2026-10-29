@@ -1,12 +1,13 @@
 // Publikacja portalu: (import z czestochowa.pl i wczestochowie.pl) → (wirtualny redaktor) → (kalendarz wydarzeń CGK) → zdjęcia z panelu → zmiany z bazy → build Astro → Firebase Hosting
-// Użycie: node scripts/publish.mjs [--import] [--redaktor] [--wydarzenia] [--no-deploy]
+// Użycie: node scripts/publish.mjs [--import] [--redaktor] [--naczelny] [--wydarzenia] [--no-deploy]
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { execSync } from 'node:child_process';
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { db, warsawNow, importSlot, IMPORT_HOURS } from '../lib/firestore.js';
 import { importLatest, importWczestochowie } from '../lib/importer.js';
-import { runRedaktor } from '../lib/redaktor.js';
+import { runRedaktor, seenKey } from '../lib/redaktor.js';
+import { runNaczelny } from '../lib/naczelny.js';
 import { aiCandidate } from '../lib/images.js';
 import { importCgk } from '../lib/cgk.js';
 
@@ -69,9 +70,32 @@ if (args.has('--import') || build.importRequested) {
 let redaktorResult = null;
 if (args.has('--redaktor') || build.redaktorRequested) {
   log('wirtualny redaktor…');
+  const store = redaktorStore();
+  const cfg = (await firestore.collection('config').doc('redaktor').get()).data() || {};
+  redaktorResult = await runRedaktor(store, { days: 7, maxDrafts: Number(process.env.REDAKTOR_MAX || 6), keep: 30, aiImages: !!cfg.aiImages, deadline: t0 + Number(process.env.REDAKTOR_MINUTES || 20) * 60e3, log })
+    .catch((e) => ({ checked: 0, drafts: [], skipped: [], duplicates: 0, errors: [e.message], pruned: [] }));
+  log(`redaktor: nowych szkiców ${redaktorResult.drafts.length}, pominiętych ${redaktorResult.skipped.length}, powtórek ${redaktorResult.duplicates}, błędów ${redaktorResult.errors.length}`);
+
+  // 1c. redaktor naczelny AI – przegląd szkiców i publikacja rozłożona w ciągu dnia (wyłączany w panelu)
+  if (cfg.autoPublish !== false) {
+    log('redaktor naczelny…');
+    redaktorResult.naczelny = await runNaczelny(naczelnyStore(store), { perDay: Number(cfg.perDay) || 16, deadline: Date.now() + Number(process.env.NACZELNY_MINUTES || 12) * 60e3, log })
+      .catch((e) => ({ checked: 0, published: [], held: [], rejected: [], newPhotos: 0, errors: [e.message] }));
+    const n = redaktorResult.naczelny;
+    log(`naczelny: sprawdzonych ${n.checked}, do publikacji ${n.published.length}, do człowieka ${n.held.length}, odrzuconych ${n.rejected.length}, nowych zdjęć ${n.newPhotos}, błędów ${n.errors.length}`);
+  }
+  await firestore.collection('redaktor_runs').add({ ...redaktorResult, trigger: build.redaktorRequested ? 'manual' : 'schedule', at: FieldValue.serverTimestamp() });
+} else if (args.has('--naczelny')) {
+  // sam przegląd szkiców (ręcznie, np. po zmianie zasad)
+  const n = await runNaczelny(naczelnyStore(redaktorStore()), { perDay: 16, log });
+  log(`naczelny: sprawdzonych ${n.checked}, do publikacji ${n.published.length}, do człowieka ${n.held.length}, odrzuconych ${n.rejected.length}, nowych zdjęć ${n.newPhotos}, błędów ${n.errors.length}`);
+}
+
+/** Dostęp do bazy i plików dla wirtualnego redaktora (lib/redaktor.js) */
+function redaktorStore() {
   const seenCol = firestore.collection('redaktor_seen');
   let cityCache = null;
-  const store = {
+  return {
     recent: async (since) =>
       (await firestore.collection('articles').where('publishedAt', '>=', since).select('title', 'lead', 'body', 'status', 'origin').get())
         // nieopublikowane przedruki z importu nie zajmują tematu – redaktor może napisać o tym własny tekst
@@ -114,11 +138,31 @@ if (args.has('--redaktor') || build.redaktorRequested) {
       await fs.rm(path.join(MEDIA, 'articles', slug), { recursive: true, force: true });
     },
   };
-  const cfg = (await firestore.collection('config').doc('redaktor').get()).data() || {};
-  redaktorResult = await runRedaktor(store, { days: 7, maxDrafts: Number(process.env.REDAKTOR_MAX || 6), keep: 30, aiImages: !!cfg.aiImages, deadline: t0 + Number(process.env.REDAKTOR_MINUTES || 20) * 60e3, log })
-    .catch((e) => ({ checked: 0, drafts: [], skipped: [], duplicates: 0, errors: [e.message], pruned: [] }));
-  await firestore.collection('redaktor_runs').add({ ...redaktorResult, trigger: build.redaktorRequested ? 'manual' : 'schedule', at: FieldValue.serverTimestamp() });
-  log(`redaktor: nowych szkiców ${redaktorResult.drafts.length}, pominiętych ${redaktorResult.skipped.length}, powtórek ${redaktorResult.duplicates}, błędów ${redaktorResult.errors.length}`);
+}
+
+/** Dostęp do bazy dla redaktora naczelnego (lib/naczelny.js) – zdjęcia jak u redaktora */
+function naczelnyStore(base) {
+  const col = firestore.collection('articles');
+  let recentCache = null;
+  const recentAll = async () => (recentCache ||= (await col.where('publishedAt', '>=', new Date(Date.now() - 5 * 864e5)).select('title', 'status', 'autoPublished', 'publishedAt').get())
+    .docs.map((d) => ({ slug: d.id, ...d.data() })).filter((a) => a.status === 'published'));
+  return {
+    ...base,
+    drafts: async () => (await col.where('origin', '==', 'redaktor').where('status', '==', 'draft').get()).docs
+      .map((d) => ({ slug: d.id, ...d.data() })).filter((a) => !a.keep && !a.review),
+    recent: async (since) => (await recentAll()).filter((a) => a.publishedAt.toMillis() >= +since)
+      .sort((a, b) => b.publishedAt.toMillis() - a.publishedAt.toMillis()).map(({ slug, title }) => ({ slug, title })),
+    autoTimes: async () => (await recentAll()).filter((a) => a.autoPublished && a.publishedAt.toMillis() >= Date.now() - 864e5).map((a) => a.publishedAt.toDate()),
+    sourceText: async (url) => {
+      if (!url) return '';
+      const seen = await firestore.collection('redaktor_seen').doc(seenKey(url)).get();
+      if (seen.get('text')) return seen.get('text');
+      const res = await fetch(url, { headers: { 'user-agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(20000) });
+      return res.ok ? (await res.text()).replace(/<(script|style)[\s\S]*?<\/\1>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(0, 12000) : '';
+    },
+    update: (slug, data) => col.doc(slug).update({ ...data, updatedAt: FieldValue.serverTimestamp() }),
+    readLocal: (url) => fs.readFile(path.join('public', url)),
+  };
 }
 
 // 1b'. kalendarz wydarzeń z cgk.czestochowa.pl (przy imporcie i przy każdym uruchomieniu redaktora, czyli co ~2 godziny)
@@ -229,6 +273,10 @@ if (importResult) {
   if (slot?.endsWith(` ${IMPORT_HOURS.at(-1)}`)) update.lastImportDay = warsawNow(startedAt.toDate()).day;
 }
 if (redaktorResult) Object.assign(update, { redaktorRequested: false, lastRedaktorAt: startedAt });
+// najbliższa zaplanowana publikacja (redaktor naczelny rozkłada teksty w ciągu dnia) – check.mjs i budzik uruchomią wtedy build
+const upcoming = (await firestore.collection('articles').where('publishedAt', '>', new Date(Date.now() + 5 * 60e3)).orderBy('publishedAt').limit(30).select('status', 'publishedAt').get())
+  .docs.find((d) => d.get('status') === 'published');
+update.nextScheduledAt = upcoming ? upcoming.get('publishedAt') : null;
 // nie kasujemy flagi, jeśli ktoś zapisał coś w trakcie publikacji
 const latest = (await buildRef.get()).data() || {};
 if (latest.dirtyAt && latest.dirtyAt.toMillis() > startedAt.toMillis()) update.dirty = true;

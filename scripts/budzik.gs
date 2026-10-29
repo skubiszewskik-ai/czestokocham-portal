@@ -1,6 +1,7 @@
 // Budzik automatu Częstokocham – Google Apps Script (darmowy, działa na serwerach Google, konto skubiszewskik@gmail.com).
 // Harmonogram GitHuba potrafi pominąć większość uruchomień, więc co 15 minut budzik sam sprawdza w Firestore
-// to samo co scripts/check.mjs (zmiany z panelu, import o 10, 12 i 15, redaktor co 2 godziny 7–21) i tylko wtedy
+// to samo co scripts/check.mjs (zmiany z panelu, import o 10, 12 i 15, redaktor co 2 godziny 7–21,
+// zaplanowane publikacje redaktora naczelnego) i tylko wtedy
 // uruchamia automat na GitHubie – nie zużywa minut GitHub Actions, gdy nic nie czeka.
 // Token GitHuba bierze z bazy (config/github – ten sam, który zapisuje panel w Ustawieniach).
 //
@@ -29,7 +30,8 @@ function whatToDo() {
   const slot = h === undefined ? null : `${day} ${h}`;
   const importDue = (!!slot && (b.lastImportSlot || {}).stringValue !== slot) || bool(b.importRequested);
   const redaktorDue = bool(b.redaktorRequested) || (hour >= 7 && hour <= 21 && Date.now() - millis(b.lastRedaktorAt) >= 2 * 3600e3);
-  return importDue ? 'import' : redaktorDue ? 'redaktor' : bool(b.dirty) ? 'build' : 'none';
+  const scheduledDue = !!millis(b.nextScheduledAt) && millis(b.nextScheduledAt) <= Date.now(); // zaplanowana publikacja redaktora naczelnego
+  return importDue ? 'import' : redaktorDue ? 'redaktor' : bool(b.dirty) || scheduledDue ? 'build' : 'none';
 }
 
 function budzik() {
