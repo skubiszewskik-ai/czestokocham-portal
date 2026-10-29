@@ -249,6 +249,32 @@ execSync('npx astro build', { stdio: 'inherit', env: { ...process.env, CK_DATA: 
 if (!args.has('--no-deploy')) {
   log('wdrożenie na Firebase Hosting…');
   execSync('npx firebase deploy --only hosting --project czestokocham --non-interactive --message "publikacja automatyczna"', { stdio: 'inherit' });
+  await indexNow();
+}
+
+// IndexNow: zgłaszamy artykuły, które od poprzedniej publikacji pojawiły się na stronie albo się zmieniły
+// (także zaplanowane, których godzina właśnie minęła). Błąd nie zatrzymuje publikacji.
+async function indexNow() {
+  const { SITE_URL = 'https://czestokocham.pl' } = process.env;
+  const key = (await fs.readdir('public')).find((f) => /^[0-9a-f]{32}\.txt$/.test(f))?.slice(0, -4);
+  const prev = build.lastBuild?.toMillis() || 0;
+  const now = Date.now();
+  const urls = Object.values(snapFile.articles)
+    .filter((a) => a.status === 'published' && +new Date(a.publishedAt) <= now && Math.max(+new Date(a.publishedAt), +new Date(a.updatedAt || 0)) > prev - 10 * 60e3)
+    .map((a) => new URL(`/${a.category}/${a.slug}`, SITE_URL).toString());
+  if (!key || !urls.length || !prev) return;
+  urls.push(new URL('/', SITE_URL).toString());
+  try {
+    const res = await fetch('https://api.indexnow.org/indexnow', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json; charset=utf-8' },
+      body: JSON.stringify({ host: new URL(SITE_URL).host, key, keyLocation: new URL(`/${key}.txt`, SITE_URL).toString(), urlList: urls.slice(0, 10000) }),
+      signal: AbortSignal.timeout(15e3),
+    });
+    log(`IndexNow: ${urls.length} adresów → ${res.status}`);
+  } catch (e) {
+    log(`IndexNow: błąd ${e.message}`);
+  }
 }
 
 // 6. porządki. W GitHub Actions kolejkę zdjęć z panelu czyści dopiero scripts/finish.mjs po udanym zapisie w repozytorium –

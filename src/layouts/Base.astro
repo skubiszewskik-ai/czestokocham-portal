@@ -31,7 +31,9 @@ const adsense = settings.adsenseEnabled && settings.adsenseClient ? settings.ads
     <title>{fullTitle}</title>
     <meta name="description" content={description} />
     <link rel="canonical" href={canonical} />
-    {noindex && <meta name="robots" content="noindex" />}
+    <meta name="robots" content={noindex ? 'noindex' : 'max-image-preview:large'} />
+    {SITE.verify.google && <meta name="google-site-verification" content={SITE.verify.google} />}
+    {SITE.verify.bing && <meta name="msvalidate.01" content={SITE.verify.bing} />}
     <meta name="theme-color" content="#1a1b2e" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />

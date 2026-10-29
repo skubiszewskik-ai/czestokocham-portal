@@ -11,6 +11,9 @@ export const SITE = {
   // adres Workera czatu (worker/index.js); puste = czat wyłączony
   chatApi: 'https://czestokocham-czat.czestokocham-pl.workers.dev',
   lang: 'pl',
+  // kody weryfikacji: Google Search Console (google-site-verification) i Bing Webmaster Tools (msvalidate.01); puste = brak tagu
+  // (IndexNow – klucz to plik public/<32 znaki hex>.txt, zgłoszenia wysyła scripts/publish.mjs)
+  verify: { google: '', bing: '' },
 };
 
 // Wydawca portalu – stowarzyszenie zwykłe (dane z rejestru REGON; nazwiska uzupełnić po stronie stowarzyszenia)
