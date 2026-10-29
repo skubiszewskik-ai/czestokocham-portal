@@ -274,7 +274,10 @@ const slugify = (s: string) => normalizeWord(s).replace(/[^a-z0-9]+/g, '-').repl
 // ---------------- wiersz artykułu ----------------
 function rowHtml(id: string, d: any) {
   const img = d.cover?.srcset?.[0]?.url;
-  const status = (d.origin === 'redaktor' ? '<span class="pill ai">AI</span>' : '') + (d.status === 'published' ? '<span class="pill on">Opublikowany</span>' : '<span class="pill off">Szkic</span>');
+  // opublikowany z przyszłą datą (np. kolejka redaktora naczelnego) – na stronie pojawi się dopiero o tej godzinie
+  const at = toDate(d.publishedAt);
+  const planned = d.status === 'published' && at && +at > Date.now() + 5 * 60e3;
+  const status = (d.origin === 'redaktor' ? '<span class="pill ai">AI</span>' : '') + (planned ? `<span class="pill plan" title="Na stronie pojawi się o tej godzinie">Zaplanowany · ${esc(fmt(at))}</span>` : d.status === 'published' ? '<span class="pill on">Opublikowany</span>' : '<span class="pill off">Szkic</span>');
   return `<button class="arow" data-id="${esc(id)}" type="button">
     <span class="arow-img" style="${img ? `background-image:url('${esc(src(img))}')` : ''}"></span>
     <span><span class="arow-t">${esc(d.title || '(bez tytułu)')}</span>
@@ -364,6 +367,7 @@ async function openEditor(id: string | null) {
   $('#slug-cat').textContent = F('category').value;
   F('status').value = d.status === 'draft' ? 'draft' : 'published';
   F('publishedAt').value = localInput(toDate(d.publishedAt) || new Date());
+  whenHint();
   F('featured').checked = !!d.featured;
   F('author').value = d.author || 'Redakcja';
   F('photoCredit').value = d.photoCredit || '';
@@ -393,6 +397,17 @@ async function openEditor(id: string | null) {
   requestAnimationFrame(grow);
   if (!id) F('title').focus();
 }
+/** Podpowiedź pod datą: opublikowany z przyszłą datą czeka w kolejce (np. redaktora naczelnego) */
+function whenHint() {
+  const at = new Date(F('publishedAt').value);
+  const planned = F('status').value === 'published' && +at > Date.now() + 5 * 60e3;
+  $('#e-when').hidden = !planned;
+  if (planned) $('#e-when-t').textContent = `Zaplanowany – pojawi się na stronie ${fmt(at)}.`;
+}
+F('publishedAt').addEventListener('input', whenHint);
+F('status').addEventListener('change', whenHint);
+$('#e-now').addEventListener('click', () => { F('publishedAt').value = localInput(new Date()); whenHint(); toast('Ustawiono teraz – kliknij „Zapisz”, a tekst pojawi się na stronie w ciągu kilku minut.'); });
+
 function updateView() {
   const v = $('#e-view') as HTMLAnchorElement;
   v.hidden = !current.id || current.data.status !== 'published';

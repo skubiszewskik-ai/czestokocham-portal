@@ -250,6 +250,7 @@ const ic = (k: keyof typeof I) => `<svg viewBox="0 0 24 24" width="20" height="2
                     <label>Status<select name="status"><option value="published">Opublikowany</option><option value="draft">Szkic</option></select></label>
                     <label>Dział<select name="category">{Object.entries(CATEGORIES).map(([k, c]) => <option value={k}>{c.name}</option>)}</select></label>
                     <label>Data publikacji<input name="publishedAt" type="datetime-local" required /></label>
+                    <p class="hint when" id="e-when" hidden><span id="e-when-t"></span> <button type="button" class="linkbtn" id="e-now">Opublikuj teraz</button></p>
                     <label class="switch"><input name="featured" type="checkbox" /><span class="sw"></span> Główny temat na stronie</label>
                   </div>
                   <div class="card">
@@ -580,6 +581,9 @@ const ic = (k: keyof typeof I) => `<svg viewBox="0 0 24 24" width="20" height="2
   .arow-r { display: flex; gap: 8px; align-items: center; }
   .pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font-size: 12.5px; font-weight: 700; background: #eef0f4; color: var(--ink-2); white-space: nowrap; }
   .pill.on { background: #dcfce7; color: #166534; }
+  .pill.plan { background: #e0ecff; color: #1e40af; }
+  .when { color: #1e40af; margin-top: -4px; }
+  .linkbtn { background: none; border: 0; padding: 0; font: inherit; font-weight: 700; color: var(--red-ink); text-decoration: underline; cursor: pointer; }
   .pill.off { background: #fef3c7; color: #92400e; }
   .pill.star { background: #fde4e5; color: #9b0f16; }
   .empty-s { padding: 40px; text-align: center; color: var(--ink-soft); }
