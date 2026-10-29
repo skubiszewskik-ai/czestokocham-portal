@@ -13,7 +13,7 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: 'build, import, redaktor albo auto (jak harmonogram: tylko gdy coś czeka)'
+        description: 'build, import, redaktor, naczelny (sam przegląd szkiców) albo auto (jak harmonogram: tylko gdy coś czeka)'
         default: build
 
 concurrency:
@@ -61,7 +61,7 @@ jobs:
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
       - name: Import, build i wdrożenie
-        run: node scripts/publish.mjs ${{ (needs.check.outputs.run == 'import' || inputs.mode == 'import') && '--import' || '' }} ${{ (needs.check.outputs.run == 'redaktor' || inputs.mode == 'redaktor') && '--redaktor' || '' }}
+        run: node scripts/publish.mjs ${{ (needs.check.outputs.run == 'import' || inputs.mode == 'import') && '--import' || '' }} ${{ (needs.check.outputs.run == 'redaktor' || inputs.mode == 'redaktor') && '--redaktor' || '' }} ${{ inputs.mode == 'naczelny' && '--naczelny' || '' }}
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
