@@ -66,7 +66,7 @@ const adsense = settings.adsenseEnabled && settings.adsenseClient ? settings.ads
       <slot />
     </main>
     <Footer />
-    {settings.analyticsId && (
+    {settings.analyticsId && !adsense && (
       <div class="consent" role="dialog" aria-label="Pliki cookies" hidden data-consent>
         <p>Używamy plików cookies Google Analytics, żeby wiedzieć, które wiadomości czytacie najchętniej. Bez Twojej zgody statystyki działają anonimowo, bez cookies. <a href="/polityka-prywatnosci">Szczegóły</a></p>
         <div class="consent-b">
@@ -122,7 +122,8 @@ const adsense = settings.adsenseEnabled && settings.adsenseClient ? settings.ads
           for (var i = 0; i < items.length; i++) { r -= +items[i].dataset.weight || 1; if (r <= 0) { pick = items[i]; break; } }
           [].forEach.call(box.children, function (a) { a.hidden = a !== pick; });
         });
-        // zgoda na statystyki (własny baner; zapamiętana w przeglądarce, zmiana: link „Ustawienia cookies” w stopce)
+        // zgoda na statystyki: przy AdSense jedno okienko – komunikat Google (TCF), bez AdSense własny baner;
+        // wybór zapamiętany w przeglądarce, zmiana: link „Ustawienia cookies” w stopce
         var consent = null;
         try { consent = localStorage.getItem('ck-consent'); } catch (e) {}
         var box = document.querySelector('[data-consent]');
@@ -132,7 +133,27 @@ const adsense = settings.adsenseEnabled && settings.adsenseClient ? settings.ads
           if (box) box.hidden = true;
           if (window.gtag) gtag('consent', 'update', { analytics_storage: v === 'yes' ? 'granted' : 'denied' });
         }
-        if (box) {
+        if (adsense) {
+          // komunikat Google ładuje się z opóźnieniem, więc czekamy na jego interfejs __tcfapi (do ~15 s)
+          var tries = 0, tcf = setInterval(function () {
+            if (typeof window.__tcfapi !== 'function') { if (++tries > 30) clearInterval(tcf); return; }
+            clearInterval(tcf);
+            __tcfapi('addEventListener', 2, function (d, ok) {
+              if (!ok || !d) return;
+              // cel 1 TCF: przechowywanie informacji na urządzeniu (pliki cookies)
+              if (d.gdprApplies === false) choose('yes');
+              else if (d.eventStatus === 'tcloaded' || d.eventStatus === 'useractioncomplete') choose(d.purpose && d.purpose.consents && d.purpose.consents[1] ? 'yes' : 'no');
+            });
+          }, 500);
+          document.querySelectorAll('[data-cookies]').forEach(function (a) {
+            a.hidden = false;
+            a.addEventListener('click', function (e) {
+              e.preventDefault();
+              window.googlefc = window.googlefc || {}; googlefc.callbackQueue = googlefc.callbackQueue || [];
+              googlefc.callbackQueue.push(function () { googlefc.showRevocationMessage(); });
+            });
+          });
+        } else if (box) {
           if (!consent) box.hidden = false;
           box.querySelector('[data-consent-yes]').addEventListener('click', function () { choose('yes'); });
           box.querySelector('[data-consent-no]').addEventListener('click', function () { choose('no'); });
