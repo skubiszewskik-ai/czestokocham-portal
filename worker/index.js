@@ -358,8 +358,12 @@ function cleanStream(body, mode) {
       if (last.trim()) write(last, st.pendingBlank);
       if (!st.wrote) write(EMPTY_ANSWER, 0);
     }
-    if (out) { ctrl.enqueue(enc.encode(sse(out).replace('data: [DONE]\n\n', ''))); out = ''; }
+    if (out) { ctrl.enqueue(enc.encode(sse(out).replace('data: [DONE]\n\n', ''))); out = ''; st.sent = Date.now(); }
   };
+  // Filtr nie przepuszcza „myślenia” modelu ani wyszukiwania – bez tego połączenie milknie na kilka–kilkanaście sekund
+  // i Safari na telefonie potrafi je zerwać („Load failed”). Komentarz SSE widget pomija.
+  let timer;
+  const keepAlive = (ctrl) => { if (Date.now() - st.sent > 1000) { try { ctrl.enqueue(enc.encode(': \n\n')); } catch {} st.sent = Date.now(); } };
   const take = (ctrl, chunk) => {
     buf += dec.decode(chunk, { stream: true });
     const lines = buf.split('\n'); buf = lines.pop();
@@ -371,8 +375,10 @@ function cleanStream(body, mode) {
     if (nl >= 0) { emit(ctrl, text.slice(0, nl).split('\n')); text = text.slice(nl + 1); }
   };
   return body.pipeThrough(new TransformStream({
+    start: (ctrl) => { ctrl.enqueue(enc.encode(': \n\n')); st.sent = Date.now(); timer = setInterval(() => keepAlive(ctrl), 1000); },
     transform: (chunk, ctrl) => take(ctrl, chunk),
-    flush: (ctrl) => { take(ctrl, enc.encode('\n')); emit(ctrl, [text], true); ctrl.enqueue(enc.encode('data: [DONE]\n\n')); },
+    flush: (ctrl) => { clearInterval(timer); take(ctrl, enc.encode('\n')); emit(ctrl, [text], true); ctrl.enqueue(enc.encode('data: [DONE]\n\n')); },
+    cancel: () => clearInterval(timer),
   }));
 }
 
