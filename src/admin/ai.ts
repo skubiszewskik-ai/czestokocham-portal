@@ -1,7 +1,7 @@
 // Asystent AI w edytorze: pisze artykuł z tematu (z wyszukiwaniem Google), z linku albo z notatek i poprawia gotowy tekst.
 // Działa w przeglądarce redaktora (plan Spark – bez serwera): Gemini z kluczem z config/ai, potem Worker czatu (/redakcja – klucze Gemini
 // i Groq trzyma Cloudflare, dostęp tylko po zalogowaniu), zapasowo Groq z klucza i Pollinations bez klucza.
-import { NACZELNY, MIN_WORDS, TARGET_WORDS, COPY_LIMIT as NACZELNY_COPY } from '../../lib/naczelny-prompt.js';
+import { NACZELNY, STYL, MIN_WORDS, TARGET_WORDS, COPY_LIMIT as NACZELNY_COPY } from '../../lib/naczelny-prompt.js';
 // Artykuł spod linku pobiera r.jina.ai (darmowy czytnik stron z CORS); gdy strona go blokuje – Gemini czyta adres sam (url_context).
 
 export type Keys = { gemini?: string; groq?: string; proxy?: { url: string; token: () => Promise<string> } };
@@ -27,7 +27,8 @@ const STYLE = `Zasady:
 - Tytuł: konkretny, do ok. 90 znaków, zwykła wielkość liter. Lead: 1–2 zdania z najważniejszą informacją.
 - Treść w HTML – tylko <p>, <h2>, <h3>, <ul>, <ol>, <li>, <strong>, <em>, <blockquote>. Bez tytułu i leadu w treści. Przy dłuższych tekstach 1–3 śródtytuły <h2>.
 - Używaj wyłącznie faktów z materiału (daty, miejsca, liczby, nazwiska, funkcje). Niczego nie zmyślaj; czego nie wiadomo – pomiń.
-- Wypowiedzi osób możesz przytoczyć krótko w cudzysłowie, z podaniem, kto mówi.`;
+- Wypowiedzi osób możesz przytoczyć krótko w cudzysłowie, z podaniem, kto mówi.
+${STYL}`;
 
 const SHAPE = `Odpowiedz WYŁĄCZNIE obiektem JSON (bez komentarza):
 {
