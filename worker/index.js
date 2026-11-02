@@ -57,7 +57,8 @@ const STYL_CZATU = `JAK ODPOWIADASZ – NAJWAŻNIEJSZE (brzmisz jak mieszkaniec,
 - Bez „nie tylko…, ale też…” i bez morału na końcu.
 - Pytanie „dlaczego” albo „jak” – odpowiedz 2–4 zwykłymi zdaniami, bez listy.
 - Pisz prosto, zdaniami różnej długości, jak znajomy, który zna miasto i odpisuje na wiadomość.
-- Nie wymyślaj lokali, restauracji, adresów ani godzin. Wieczór to godziny po 17:00 – nie proponuj na wieczór rzeczy z rana.`;
+- Nie wymyślaj lokali, restauracji, adresów ani godzin. Wieczór to godziny po 17:00 – nie proponuj na wieczór rzeczy z rana.
+- Restauracje, kawiarnie, puby: NIE masz ich listy. Nazwę lokalu podaj tylko, jeśli dosłownie widzisz ją w WIEDZY PORTALU albo w wynikach wyszukiwarki. W przeciwnym razie wskaż okolicę (Aleje NMP, okolice pl. Biegańskiego) i odeślij do Google Maps – bez nazw.`;
 const cors = (req) => {
   const o = req.headers.get('Origin') || '';
   const ok = ORIGINS.some((r) => r.test(o));
@@ -312,6 +313,69 @@ async function tts(env, text, ctxWait) {
   return null;
 }
 
+// --- Czyszczenie odpowiedzi: modele (zwłaszcza gpt-oss) ignorują część STYL_CZATU, więc nawyki czatbota zdejmujemy w kodzie.
+// Działa na pełnych liniach – niedokończoną trzymamy do następnego kawałka, więc „**” ani zdanie nie rozetną się w pół.
+// Ostatnią linię wysyłamy dopiero na końcu: tylko z niej zdejmujemy „daj znać…”, bo w środku takie zdanie bywa treścią.
+const WISH = /(?:^|(?<=[.!?:]\s))[^.!?\n]*?\b(?:Miłego|Udanego|Owocnego|Smacznego|Powodzenia|Dobrej zabawy|Baw się dobrze|Życzę)\b[^.!?\n]*!/gi;
+const SOFT_END = /(?:^|(?<=[.!?:]\s))[^.!?\n]*\b(?:daj znać|dajcie znać|chętnie (?:pomogę|podpowiem|pomożemy)|służę pomocą|mam nadzieję, że)[^.!?\n]*[.!?]\s*$/i;
+const GREETING = /^(?:Cześć|Hej|Dzień dobry|Witaj[^.!?\n]*|Świetne pytanie|Dobre pytanie|Oczywiście|Jasne)[!,.]\s*/i;
+const EMPTY_ANSWER = 'Nie udało mi się teraz przygotować odpowiedzi. Spróbuj zapytać jeszcze raz, trochę inaczej.';
+function tidyLine(line, st) {
+  let s = line;
+  if (!st.started) {
+    if (!s.trim()) return null;
+    s = s.replace(GREETING, '');
+    // tytuł nad odpowiedzią („**Co warto zobaczyć**”)
+    if (!st.plan && /^\s*\*\*[^*]+\*\*:?\s*$/.test(s)) return null;
+    if (!s.trim()) return null;
+    st.started = true;
+  }
+  if (/^\s*Oto\b[^.!?\n]*:\s*$/.test(s)) return null; // zapowiedź („Oto główne powody:”)
+  s = s.replace(/^(\s*)\*(\s+)/, '$1-$2'); // punkty „* ” jak reszta: „- ”
+  if (!st.plan) s = s.replace(/^(\s*-\s+)\*\*(.+?)\*\*/, '$1$2'); // pogrubiona etykieta na początku punktu
+  s = s.replace(/\*\*(\[[^\]]+\]\([^)]+\))\*\*/g, '$1'); // pogrubione linki
+  const had = s.trim();
+  s = s.replace(WISH, '').replace(/[ \t]+$/, '');
+  if (had && !s.trim()) return null; // linia była samymi życzeniami
+  return s;
+}
+function cleanStream(body, mode) {
+  const st = { started: false, plan: mode === 'plan', blank: 0, wrote: false, pending: null, pendingBlank: 0 };
+  const enc = new TextEncoder(), dec = new TextDecoder();
+  let buf = '', text = '', out = '';
+  const write = (t, blank) => { out += (st.wrote ? '\n'.repeat(Math.min(blank, 1) + 1) : '') + t; st.wrote = true; };
+  const emit = (ctrl, lines, final) => {
+    for (const l of lines) {
+      const t = tidyLine(l, st);
+      if (t === null) continue;
+      if (!t.trim()) { st.blank++; continue; }
+      if (st.pending !== null) write(st.pending, st.pendingBlank);
+      st.pending = t; st.pendingBlank = st.blank; st.blank = 0;
+    }
+    if (final) {
+      let last = st.pending || '';
+      for (let prev; prev !== last;) { prev = last; last = last.replace(SOFT_END, '').trimEnd(); }
+      if (last.trim()) write(last, st.pendingBlank);
+      if (!st.wrote) write(EMPTY_ANSWER, 0);
+    }
+    if (out) { ctrl.enqueue(enc.encode(sse(out).replace('data: [DONE]\n\n', ''))); out = ''; }
+  };
+  const take = (ctrl, chunk) => {
+    buf += dec.decode(chunk, { stream: true });
+    const lines = buf.split('\n'); buf = lines.pop();
+    for (const l of lines) {
+      if (!l.startsWith('data:')) continue;
+      try { text += JSON.parse(l.slice(5)).choices[0].delta.content || ''; } catch {}
+    }
+    const nl = text.lastIndexOf('\n');
+    if (nl >= 0) { emit(ctrl, text.slice(0, nl).split('\n')); text = text.slice(nl + 1); }
+  };
+  return body.pipeThrough(new TransformStream({
+    transform: (chunk, ctrl) => take(ctrl, chunk),
+    flush: (ctrl) => { take(ctrl, enc.encode('\n')); emit(ctrl, [text], true); ctrl.enqueue(enc.encode('data: [DONE]\n\n')); },
+  }));
+}
+
 // Podsumowanie dnia jest takie samo dla wszystkich – generujemy je raz na godzinę i oddajemy z pamięci
 const briefKey = () => new Request(`https://cache.czestokocham.pl/brief/${iso(new Date())}-${hourPl(new Date())}`);
 const sse = (text) => `data: ${JSON.stringify({ choices: [{ delta: { content: text } }] })}\n\ndata: [DONE]\n\n`;
@@ -459,8 +523,8 @@ export default {
         try {
           const res = await call(p, messages, extra);
           if (res.ok && res.body) {
-            let out = res.body;
-            if (bk) { const [a, b] = res.body.tee(); out = a; ctx.waitUntil(saveBrief(b, bk)); }
+            let out = cleanStream(res.body, mode);
+            if (bk) { const [a, b] = out.tee(); out = a; ctx.waitUntil(saveBrief(b, bk)); }
             return new Response(out, { headers: { 'content-type': 'text/event-stream; charset=utf-8', 'cache-control': 'no-store', ...ch } });
           }
           errors.push(`${p.name} ${res.status}`);
