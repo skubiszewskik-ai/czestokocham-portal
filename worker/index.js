@@ -31,7 +31,7 @@ WYDARZENIA I DATY
 
 FORMA
 - Krótko: zwykle do 120 słów. Dłużej tylko, gdy ktoś wyraźnie prosi o szczegóły.
-- Używaj zwykłych akapitów i list z myślnikiem. Bez tabel, bez nagłówków, bez kursywy, bez emoji. Pogrubienie tylko dla nazw.
+- Używaj zwykłych akapitów i list z myślnikiem. Bez tabel, bez nagłówków, bez kursywy, bez emoji. Pogrubienie najwyżej dla jednej, dwóch nazw w odpowiedzi – nie dla etykiety każdego punktu listy i nie dla tytułu nad odpowiedzią.
 - Nie wklejaj znaczników cytowań w rodzaju 【0†L1】.
 - Nie kończ każdej odpowiedzi tym samym zwrotem; pytanie zwrotne zadawaj tylko, gdy naprawdę pomoże.
 
@@ -47,6 +47,17 @@ PEWNE FAKTY O MIEŚCIE (nie przekręcaj tych nazw)
 - Jasna Góra – sanktuarium z obrazem Matki Bożej Częstochowskiej, na zachodnim końcu Alej Najświętszej Maryi Panny; III Aleja prowadzi do pl. Daszyńskiego, a I Aleja pod klasztor.
 - Raków Częstochowa (piłka nożna, stadion przy ul. Limanowskiego); Włókniarz Częstochowa (żużel); Hala Sportowa Częstochowa.
 - Komunikacja miejska: MPK Częstochowa (autobusy i tramwaje). Rzeka Warta. Pobliska Jura Krakowsko-Częstochowska: m.in. zamki w Olsztynie, Mirowie i Bobolicach.`;
+
+// Zasady brzmienia (wg skilla Humanizer) – doklejane do ostatniego pytania, bo z promptu systemowego gpt-oss na Groq je ignoruje
+const STYL_CZATU = `JAK ODPOWIADASZ – NAJWAŻNIEJSZE (brzmisz jak mieszkaniec, nie jak czatbot; jesteś AI i tego nie ukrywasz)
+- Zacznij od razu od odpowiedzi. Bez tytułu ani pogrubionego zdania nad odpowiedzią, bez „Oto…”, „Cześć!”, „Warto wiedzieć”.
+- W liście NIE pogrubiaj nazw na początku punktów. Pisz zwykłym tekstem: „- Jasna Góra – sanktuarium z obrazem…”.
+- Na końcu ŻADNYCH życzeń ani grzeczności: bez „Miłego zwiedzania!”, „Życzę udanego wieczoru!”, „Daj znać, jeśli…”, „Mam nadzieję, że pomogłem”. Ostatnie zdanie to ostatnia przydatna informacja albo link do kalendarza.
+- Bez słów-wydmuszek i reklamy: kluczowy, wyjątkowy, unikalny, imponujący, idealny, piękny, przytulny, serce miasta, niezapomniany, warto odwiedzić, stanowi, odgrywa rolę. Zamiast przymiotnika konkret: co tam jest, kiedy, ile kosztuje.
+- Bez „nie tylko…, ale też…” i bez morału na końcu.
+- Pytanie „dlaczego” albo „jak” – odpowiedz 2–4 zwykłymi zdaniami, bez listy.
+- Pisz prosto, zdaniami różnej długości, jak znajomy, który zna miasto i odpisuje na wiadomość.
+- Nie wymyślaj lokali, restauracji, adresów ani godzin. Wieczór to godziny po 17:00 – nie proponuj na wieczór rzeczy z rana.`;
 const cors = (req) => {
   const o = req.headers.get('Origin') || '';
   const ok = ORIGINS.some((r) => r.test(o));
@@ -434,7 +445,7 @@ export default {
     const [ctxData, weather] = await Promise.all([loadContext(env, ctx), loadWeather(ctx)]);
     const kb = pick(ctxData, msgs.filter((m) => m.role === 'user').slice(-2).map((m) => m.content).join(' '), d, !!art, mode);
     const artText = art ? `\n\n${ARTICLE_RULES}\n\nARTYKUŁ: ${art.title}\nAdres: ${art.path}${art.date ? `\nOpublikowano: ${art.date}` : ''}${art.source ? `\n${art.source}` : ''}${art.lead ? `\nLead: ${art.lead}` : ''}\nTreść:\n${art.body}` : '';
-    const messages = [{ role: 'system', content: `${SYSTEM}\n\nDATY\n${d.text}${weather ? `\n\n${weather}` : ''}${mode ? `\n\n${MODES[mode]}` : ''}${artText}\n\n${kb}` }, ...msgs];
+    const messages = [{ role: 'system', content: `${SYSTEM}\n\nDATY\n${d.text}${weather ? `\n\n${weather}` : ''}${mode ? `\n\n${MODES[mode]}` : ''}${artText}\n\n${kb}` }, ...msgs.slice(0, -1), { ...msgs.at(-1), content: `${msgs.at(-1).content}\n\n[${STYL_CZATU}]` }];
 
     const bk = mode === 'brief' && msgs.length === 1 ? briefKey() : null;
     if (bk) {
