@@ -138,19 +138,23 @@ const adsense = settings.adsenseEnabled && settings.adsenseClient ? settings.ads
           box.querySelector('[data-consent-no]').addEventListener('click', function () { choose('no'); });
           document.querySelectorAll('[data-cookies]').forEach(function (a) { a.hidden = false; a.addEventListener('click', function (e) { e.preventDefault(); box.hidden = false; }); });
         }
-        // skrypt AdSense jest w <head> (wymóg weryfikacji Google); miejsca reklamowe i statystyki ruszają po pierwszej interakcji
+        // skrypt AdSense jest w <head> (wymóg weryfikacji Google); miejsca reklamowe ruszają zaraz po załadowaniu strony
+        // (każde wyświetlenie to przychód, także u czytelników, którzy szybko wychodzą), statystyki po pierwszej interakcji
+        function ads() {
+          // tylko widoczne miejsca (ukryta kolumna boczna ma szerokość 0, a błąd Google przerywałby kolejne reklamy)
+          var ins = [].slice.call(document.querySelectorAll('ins.adsbygoogle:not([data-adsbygoogle-status])'));
+          ins.forEach(function (el) { if (!el.offsetWidth) el.classList.remove('adsbygoogle'); });
+          ins.forEach(function (el) {
+            if (!el.classList.contains('adsbygoogle')) return;
+            try { (window.adsbygoogle = window.adsbygoogle || []).push({}); } catch (e) {}
+          });
+        }
+        if (adsense) {
+          if (document.readyState === 'complete') ads(); else addEventListener('load', ads, { once: true });
+        }
         var loaded = false;
         function late() {
           if (loaded) return; loaded = true;
-          // tylko widoczne miejsca (ukryta kolumna boczna ma szerokość 0, a błąd Google przerywałby kolejne reklamy)
-          if (adsense) {
-            var ins = [].slice.call(document.querySelectorAll('ins.adsbygoogle:not([data-adsbygoogle-status])'));
-            ins.forEach(function (el) { if (!el.offsetWidth) el.classList.remove('adsbygoogle'); });
-            ins.forEach(function (el) {
-              if (!el.classList.contains('adsbygoogle')) return;
-              try { (window.adsbygoogle = window.adsbygoogle || []).push({}); } catch (e) {}
-            });
-          }
           if (ga) {
             var g = document.createElement('script'); g.async = true;
             g.src = 'https://www.googletagmanager.com/gtag/js?id=' + ga; document.head.appendChild(g);
