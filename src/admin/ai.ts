@@ -13,6 +13,8 @@ export type Draft = {
   sources: { title: string; url: string }[];
   basedOn: { name: string; url: string; title: string } | null;
   copyRisk: number | null; provider: string; model: string;
+  sourceText: string | null; // treść źródła – naczelny porównuje z nią fakty i podobieństwo
+  check: Verdict | null; // ocena naczelnego po napisaniu (null, gdy się nie udała)
 };
 
 const GEMINI = 'https://generativelanguage.googleapis.com/v1beta';
@@ -210,16 +212,28 @@ function draftFrom(a: Answer, extra: Partial<Draft> = {}): Draft {
     illustrationPrompt: String(d.illustrationPrompt || ''),
     person: d.person?.name ? { name: String(d.person.name).slice(0, 80), role: String(d.person.role || '').slice(0, 160) } : null,
     sources: a.sources.slice(0, 8),
-    basedOn: null, copyRisk: null, provider: a.provider, model: a.model,
+    basedOn: null, copyRisk: null, provider: a.provider, model: a.model, sourceText: null, check: null,
     ...extra,
   };
 }
 
-export type GenOpts = { mode: Mode; input: string; notes: string; length: string; keys: Keys; step?: (t: string) => void; ours?: string[] };
+export type GenOpts = { mode: Mode; input: string; notes: string; length: string; keys: Keys; step?: (t: string) => void; ours?: CheckCtx['ours'] };
 
-/** Nowy artykuł z tematu, linku albo wklejonego materiału */
+/** Nowy artykuł z tematu, linku albo wklejonego materiału – od razu poprawiony przez naczelnego (te same zasady, co automat) */
 export async function generate(o: GenOpts): Promise<Draft> {
   const step = o.step || (() => {});
+  const d = await write(o, step);
+  try {
+    const { text, check } = await naczelnyFix(d, o.keys, { source: d.sourceText || undefined, sourceName: d.basedOn?.name, sourceTitle: d.basedOn?.title, ours: o.ours, step });
+    Object.assign(d, text, { check, copyRisk: check.copy !== null && check.copy > COPY_LIMIT ? Math.round(check.copy * 100) : null });
+  } catch {} // zostaje tekst redaktora – naczelnego można uruchomić przyciskiem
+  return d;
+}
+
+// Podpis cudzego portalu idzie pod artykuł (pole „Źródło”), nie do treści – tak jak w automacie naczelny usuwa nazwy innych mediów z tekstu
+const exclusiveRule = (site: string) => `Jeśli to własne ustalenie portalu ${site} (reportaż, wywiad, śledztwo), ustaw "exclusive": true – redakcja doda pod tekstem „Źródło: ${site}”; w samej treści nie wymieniaj tego portalu ani innych mediów. Komunikat instytucji, zapowiedź, wynik meczu – "exclusive": false.`;
+
+async function write(o: GenOpts, step: (t: string) => void): Promise<Draft> {
   const len = `Długość treści: ${LENGTH[o.length] || LENGTH.normal}.`;
   const hints = o.notes.trim() ? `\n\nWSKAZÓWKI REDAKCJI (mają pierwszeństwo):\n${o.notes.trim()}` : '';
   const head = `DZISIEJSZA DATA: ${today()}\n${len}`;
@@ -253,7 +267,7 @@ ${o.keys.gemini ? 'Najpierw wyszukaj w Google aktualne, wiarygodne informacje na
       const user = `${head}
 
 ZADANIE: przeczytaj artykuł pod adresem ${url} (portal ${site}) i na podstawie jego faktów napisz CAŁKOWICIE WŁASNY tekst – inny układ, inne słowa, najwyżej 4 kolejne słowa wspólne ze źródłem (poza nazwami własnymi).
-${official ? 'To komunikat instytucji: "exclusive": false i nie wspominaj strony źródłowej.' : `Jeśli to własne ustalenie portalu (reportaż, wywiad, śledztwo), ustaw "exclusive": true i w pierwszym akapicie dodaj „– informuje portal ${site}”. Komunikat instytucji, zapowiedź, wynik meczu – "exclusive": false.`}${hints}`;
+${official ? 'To komunikat instytucji: "exclusive": false i nie wspominaj strony źródłowej.' : exclusiveRule(site)}${hints}`;
       const a = await chat(o.keys, { system: SYSTEM, user, tools: ['url'] }, true);
       const d = draftFrom(a, { basedOn: { name: site, url, title: '' }, sources: [] });
       if (official) d.exclusive = false;
@@ -266,7 +280,7 @@ ${official ? 'To komunikat instytucji: "exclusive": false i nie wspominaj strony
   const portal = basedOn ? `Portal: ${basedOn.name}\nTytuł: ${basedOn.title || '-'}\n` : '';
   const task = basedOn
     ? `ZADANIE: na podstawie faktów z artykułu ${official ? 'ze strony instytucji' : 'innego portalu'} napisz CAŁKOWICIE WŁASNY tekst – inny układ, inne słowa, najwyżej 4 kolejne słowa wspólne ze źródłem (poza nazwami własnymi).
-${official ? 'To komunikat instytucji: "exclusive": false i nie wspominaj strony źródłowej.' : `Jeśli to własne ustalenie portalu (reportaż, wywiad, śledztwo), ustaw "exclusive": true i w pierwszym akapicie dodaj „– informuje portal ${basedOn.name}”. Komunikat instytucji, zapowiedź, wynik meczu – "exclusive": false.`}`
+${official ? 'To komunikat instytucji: "exclusive": false i nie wspominaj strony źródłowej.' : exclusiveRule(basedOn.name)}`
     : 'ZADANIE: z materiału redakcji (notatki, komunikat, informacja prasowa) napisz gotowy artykuł. Komunikat możesz zredagować swobodnie, ale nie dodawaj faktów spoza materiału. "exclusive": false.';
   const user = (more = '') => `${head}
 
@@ -287,8 +301,9 @@ ${source}`;
       if (copy2 < copy) { a = b; copy = copy2; }
     } catch {} // zostaje pierwsza wersja z ostrzeżeniem w panelu
   }
-  const d = draftFrom(a, { basedOn, copyRisk: copy > COPY_LIMIT ? Math.round(copy * 100) : null });
-  if (official) { d.exclusive = false; d.body = d.body.replace(/\s*[–-]\s*informuje portal [^.,<]*/i, ''); }
+  const d = draftFrom(a, { basedOn, copyRisk: copy > COPY_LIMIT ? Math.round(copy * 100) : null, sourceText: source || null });
+  if (official) d.exclusive = false;
+  d.body = d.body.replace(/\s*[–-]\s*(informuje|podaje|pisze) portal [^.,<]*/gi, '');
   return d;
 }
 
@@ -342,6 +357,9 @@ ${a.body}${kind === 'longer' ? sourceBlock(o.source) : ''}`;
 export type Verdict = { verdict: 'publish' | 'hold' | 'reject'; problems: string[]; fixed: Text | null; copy: number | null; words: number; provider: string; at: number };
 export type CheckCtx = { source?: string; sourceName?: string; sourceTitle?: string; ours?: { slug: string; title: string }[]; step?: (t: string) => void };
 
+const NO_SOURCE = '(brak tekstu źródła do porównania – fakty sprawdza redakcja. Oceń język, styl, aktualność, powtórki i ostrożność prawną. Sam brak źródła NIE jest powodem do "hold" ani problemem do zgłoszenia.)';
+const NO_SOURCE_PROBLEM = /(brak|brakuje|nie podano|bez)\s+(materiału\s+)?źród|źród\w*\s+(jest\s+)?(niedostęp|nieczytel|nie\s+został)|nie\s+(można|da\s+się)\s+(zweryfikować|sprawdzić)/i;
+
 /** Ocena tekstu tymi samymi zasadami, co automat (lib/naczelny-prompt.js) + twarde progi: podobieństwo do źródła i długość */
 export async function naczelnyCheck(a: Text, keys: Keys, c: CheckCtx = {}): Promise<Verdict> {
   const date = new Intl.DateTimeFormat('pl-PL', { timeZone: 'Europe/Warsaw', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date());
@@ -358,12 +376,16 @@ ${a.body}
 
 MATERIAŁ ŹRÓDŁOWY (${c.sourceName || 'brak'})
 Tytuł: ${c.sourceTitle || '-'}
-${c.source ? c.source.slice(0, 7000) : '(brak źródła – to tekst redakcji; sprawdź tylko język, aktualność, powtórki i ostrożność prawną)'}`;
+${c.source ? c.source.slice(0, 7000) : NO_SOURCE}
+
+UWAGA: to sprawdzenie w panelu, przy którym jest człowiek. Podpis „Źródło: …” pod artykułem ustawia redakcja – nie zgłaszaj go jako problemu (w samej treści nazw innych mediów nadal nie ma być).`;
   const { data: r, provider } = await chat(keys, { system: NACZELNY, user, temperature: 0.2 });
-  const problems: string[] = (Array.isArray(r?.problems) ? r.problems : []).map(String).filter(Boolean).slice(0, 8);
+  // bez tekstu źródła naczelny lubi zgłaszać sam jego brak – to nie błąd tekstu i „Napraw” by go nigdy nie usunął
+  const problems: string[] = (Array.isArray(r?.problems) ? r.problems : []).map(String).filter((p: string) => p && !(!c.source && NO_SOURCE_PROBLEM.test(p))).slice(0, 8);
   const copy = c.source ? copyRatio(`${a.lead} ${a.body}`, c.source) : null;
   const words = wordCount(a.body);
   let verdict: Verdict['verdict'] = ['publish', 'hold', 'reject'].includes(r?.verdict) ? r.verdict : 'hold';
+  if (verdict === 'hold' && !problems.length) verdict = 'publish';
   if (copy !== null && copy > NACZELNY_COPY) { verdict = verdict === 'reject' ? 'reject' : 'hold'; problems.unshift(`${Math.round(copy * 100)}% zwrotów pokrywa się ze źródłem (dopuszczalne ${NACZELNY_COPY * 100}%)`); }
   if (words < MIN_WORDS) { verdict = verdict === 'reject' ? 'reject' : 'hold'; problems.unshift(`za krótki tekst: ${words} słów (minimum ${MIN_WORDS})`); }
   if (r?.duplicateOf) problems.push(`podobny temat: ${r.duplicateOf}`);
@@ -371,39 +393,62 @@ ${c.source ? c.source.slice(0, 7000) : '(brak źródła – to tekst redakcji; s
   return { verdict, problems, fixed: f, copy, words, provider, at: Date.now() };
 }
 
-/** Naprawa przez naczelnego: jego poprawki → przeredagowanie zbyt podobnych fragmentów → rozbudowa za krótkiego → ponowna ocena */
+/** Naprawa przez naczelnego: jego poprawki → przeredagowanie zbyt podobnych fragmentów → rozbudowa za krótkiego → poprawa
+ *  pozostałych uwag → ponowna ocena; gdy nadal „do poprawy”, druga runda z nowymi uwagami */
 export async function naczelnyFix(a: Text, keys: Keys, c: CheckCtx = {}): Promise<{ text: Text; check: Verdict }> {
   const step = c.step || (() => {});
   step('Naczelny czyta tekst…');
   let text = a;
   let check = await naczelnyCheck(text, keys, c);
-  if (check.fixed) text = check.fixed;
   const copy = () => (c.source ? copyRatio(`${text.lead} ${text.body}`, c.source) : 0);
-  if (copy() > NACZELNY_COPY) {
-    step(`Przeredagowuję zdania podobne do źródła (${Math.round(copy() * 100)}%)…`);
-    for (let i = 0; i < 2 && copy() > NACZELNY_COPY; i++) {
-      const { data } = await chat(keys, {
-        system: REWRITE_SYSTEM, temperature: 0.7,
-        user: `ZADANIE: tekst ma ${Math.round(copy() * 100)}% pięciowyrazowych zwrotów wspólnych ze źródłem – dopuszczalne ${NACZELNY_COPY * 100}%. Napisz go od nowa własnymi słowami: inna budowa zdań, inna kolejność informacji, synonimy; zachowaj wszystkie fakty, długość (ok. ${wordCount(text.body)} słów) i śródtytuły. Nazwy własne, liczby i cytaty mogą zostać.
+  const asText = (data: any): Text | null => data?.body ? { title: String(data.title || text.title).slice(0, 160), lead: String(data.lead ?? text.lead).slice(0, 400), body: String(data.body) } : null;
+  for (let round = 0; round < 2; round++) {
+    if (check.verdict === 'reject') break; // powtórka albo nieaktualne – tego poprawki nie zmienią
+    if (check.fixed) text = check.fixed;
+    if (copy() > NACZELNY_COPY) {
+      step(`Przeredagowuję zdania podobne do źródła (${Math.round(copy() * 100)}%)…`);
+      for (let i = 0; i < 2 && copy() > NACZELNY_COPY; i++) {
+        const { data } = await chat(keys, {
+          system: REWRITE_SYSTEM, temperature: 0.7,
+          user: `ZADANIE: tekst ma ${Math.round(copy() * 100)}% pięciowyrazowych zwrotów wspólnych ze źródłem – dopuszczalne ${NACZELNY_COPY * 100}%. Napisz go od nowa własnymi słowami: inna budowa zdań, inna kolejność informacji, synonimy; zachowaj wszystkie fakty, długość (ok. ${wordCount(text.body)} słów) i śródtytuły. Nazwy własne, liczby i cytaty mogą zostać.
 
 TYTUŁ: ${text.title}
 LEAD: ${text.lead}
 TREŚĆ (HTML):
 ${text.body}${sourceBlock(c.source)}`,
-      });
-      if (data?.body) {
-        const next = { title: String(data.title || text.title).slice(0, 160), lead: String(data.lead ?? text.lead).slice(0, 400), body: String(data.body) };
-        if (!c.source || copyRatio(`${next.lead} ${next.body}`, c.source) < copy()) text = next;
+        });
+        const next = asText(data);
+        if (next && (!c.source || copyRatio(`${next.lead} ${next.body}`, c.source) < copy())) text = next;
       }
     }
+    if (wordCount(text.body) < TARGET_WORDS) {
+      step(`Rozbudowuję tekst (${wordCount(text.body)} słów)…`);
+      text = await rewrite('longer', text, keys, { source: c.source, step }).catch(() => text);
+    }
+    // uwagi, których naczelny sam nie poprawił w "fixed" (progi długości i podobieństwa załatwiły kroki wyżej)
+    const left = check.problems.filter((p) => !/zwrotów pokrywa się ze źródłem|za krótki tekst|podobny temat/.test(p));
+    if (left.length && !check.fixed) {
+      step('Poprawiam uwagi naczelnego…');
+      const { data } = await chat(keys, {
+        system: REWRITE_SYSTEM, temperature: 0.4,
+        user: `ZADANIE: redaktor naczelny zgłosił uwagi do tekstu. Popraw tekst tak, żeby każda z nich zniknęła – usuń albo przeredaguj zdania, których dotyczą (fakty bez potwierdzenia w źródle usuń, nazwy innych mediów usuń, nawyki tekstów AI zamień na zwykłe zdania). Resztę zostaw, nie skracaj bez potrzeby i nie dopisuj nowych faktów.
+
+UWAGI NACZELNEGO:
+${left.map((p) => `- ${p}`).join('\n')}
+
+TYTUŁ: ${text.title}
+LEAD: ${text.lead}
+TREŚĆ (HTML):
+${text.body}${sourceBlock(c.source)}`,
+      }).catch(() => ({ data: null }));
+      text = asText(data) || text;
+    }
+    step('Naczelny sprawdza poprawioną wersję…');
+    check = await naczelnyCheck(text, keys, c);
+    if (check.verdict !== 'hold') break;
   }
-  if (wordCount(text.body) < TARGET_WORDS) {
-    step(`Rozbudowuję tekst (${wordCount(text.body)} słów)…`);
-    text = await rewrite('longer', text, keys, { source: c.source, step }).catch(() => text);
-  }
-  step('Naczelny sprawdza poprawioną wersję…');
-  check = await naczelnyCheck(text, keys, c);
-  return { text, check };
+  if (check.fixed && check.verdict === 'publish') text = check.fixed; // drobne poprawki z ostatniej oceny
+  return { text, check: { ...check, fixed: null } };
 }
 
 /** Kilka propozycji tytułu */

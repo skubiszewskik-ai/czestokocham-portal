@@ -1167,6 +1167,10 @@ function applyDraft(d: Draft) {
   articlePerson = d.person?.name || '';
   syncCoverTools();
   aiGen = { mode: genMode, provider: d.provider, model: d.model, basedOn: d.basedOn, person: d.person, tags: d.tags, illustrationPrompt: d.illustrationPrompt || null, at: new Date() };
+  // źródło już pobrane przy pisaniu – „Sprawdź”/„Napraw” porównują z nim bez ponownego pobierania
+  srcCache = d.sourceText && d.basedOn ? Promise.resolve({ text: d.sourceText, name: d.basedOn.name, title: d.basedOn.title }) : null;
+  lastCheck = d.check ? { key: textKey(), v: d.check } : null;
+  renderCheck(d.check);
   keepDraft();
 }
 $('#gen-go').addEventListener('click', async () => {
@@ -1179,12 +1183,12 @@ $('#gen-go').addEventListener('click', async () => {
   btn.disabled = true; btn.classList.add('busy');
   genStatus('Łączę się z AI…');
   try {
-    const d = await generate({ mode: genMode, input, notes: ($('#gen-notes') as HTMLTextAreaElement).value, length: ($('#gen-len') as HTMLSelectElement).value, keys: await keys(), step: (t) => genStatus(esc(t)) });
+    const d = await generate({ mode: genMode, input, notes: ($('#gen-notes') as HTMLTextAreaElement).value, length: ($('#gen-len') as HTMLSelectElement).value, keys: await keys(), step: (t) => genStatus(esc(t)), ours: await oursRecent() });
     applyDraft(d);
     const notes = [
-      `<strong>Gotowe.</strong> Status ustawiony na „Szkic” – sprawdź fakty, dodaj zdjęcie główne i opublikuj.`,
+      `<strong>Gotowe.</strong> Status ustawiony na „Szkic” – ${d.check ? `naczelny: ${esc(VERDICT[d.check.verdict] || d.check.verdict)}${d.check.problems.length ? ' (uwagi pod przyciskami naczelnego)' : ''}. ` : ''}Dodaj zdjęcie główne i opublikuj.`,
       d.copyRisk ? `<br><strong>Uwaga: ${d.copyRisk}% zwrotów pokrywa się ze źródłem – przeredaguj tekst.</strong>` : '',
-      d.basedOn ? `<br>Na podstawie: <a href="${esc(d.basedOn.url)}" target="_blank" rel="noopener">${esc(d.basedOn.title || d.basedOn.name)}</a>${d.exclusive ? ' – to własny materiał portalu, dopisałem źródło.' : ''}` : '',
+      d.basedOn ? `<br>Na podstawie: <a href="${esc(d.basedOn.url)}" target="_blank" rel="noopener">${esc(d.basedOn.title || d.basedOn.name)}</a>${d.exclusive ? ' – to własny materiał portalu, dopisałem źródło pod artykułem.' : ''}` : '',
       d.person ? `<br>Tekst o osobie (${esc(d.person.name)}) – użyj jej prawdziwego zdjęcia, nie ilustracji AI.` : '',
       d.sources.length ? `<br>Źródła z wyszukiwania:<ul>${d.sources.slice(0, 5).map((s) => `<li><a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.title)}</a></li>`).join('')}</ul>` : '',
       d.provider !== 'gemini' ? `<br><small>Napisane zapasowym modelem (${esc(d.provider)}).</small>` : '',
@@ -1230,14 +1234,17 @@ $$('[data-ai]').forEach((b) => b.addEventListener('click', async () => {
 const VERDICT: Record<string, string> = { publish: 'gotowy do publikacji', hold: 'do poprawy', reject: 'do odrzucenia' };
 const textKey = () => `${F('title').value.trim()}\n${F('lead').value.trim()}\n${bodyHtml()}`;
 /** Źródło tekstu (artykuł, na którym oparto szkic) – pobrane raz na otwarcie edytora */
+/** Opublikowane artykuły z ostatnich dni – naczelny sprawdza z nimi powtórki tematów */
+async function oursRecent() {
+  const recent = await getDocs(query(collection(db, 'articles'), where('publishedAt', '>=', Timestamp.fromMillis(Date.now() - 4 * 864e5)))).catch(() => null);
+  return (recent?.docs || []).filter((d) => d.id !== current.id && d.get('status') === 'published').map((d) => ({ slug: d.id, title: String(d.get('title') || '') }));
+}
 async function checkCtx(step?: (t: string) => void): Promise<CheckCtx> {
-  const base = current.data.basedOn?.url ? current.data.basedOn : current.data.source?.url ? current.data.source : null;
+  // źródło: szkic automatu (basedOn), tekst z linku w panelu (aiGen / zapisane aiAssist) albo podpis „Źródło” pod artykułem
+  const base = [current.data.basedOn, aiGen?.basedOn, current.data.aiAssist?.basedOn, current.data.source].find((b) => b?.url) || null;
   if (base && !srcCache) srcCache = fetchArticle(base.url).then((p) => (p ? { text: p.text, name: base.name || p.site, title: base.title || p.title } : null));
-  const [src, recent] = await Promise.all([
-    srcCache,
-    getDocs(query(collection(db, 'articles'), where('publishedAt', '>=', Timestamp.fromMillis(Date.now() - 4 * 864e5)))).catch(() => null),
-  ]);
-  const ours = (recent?.docs || []).filter((d) => d.id !== current.id && d.get('status') === 'published').map((d) => ({ slug: d.id, title: String(d.get('title') || '') }));
+  const [src, ours] = await Promise.all([srcCache, oursRecent()]);
+  if (!src) srcCache = null; // nieudane pobranie – następny klik spróbuje znowu
   return { source: src?.text, sourceName: src?.name, sourceTitle: src?.title, ours, step };
 }
 function renderCheck(v: (Partial<Verdict> & { verdict?: string }) | null, note = '') {
@@ -1260,7 +1267,7 @@ async function runCheck(): Promise<Verdict | null> {
   try {
     const v = await naczelnyCheck(a, await keys(), await checkCtx());
     lastCheck = { key: textKey(), v };
-    renderCheck(v, (await checkCtx()).source ? '' : 'źródło niedostępne – bez porównania');
+    renderCheck(v, v.copy !== null ? '' : 'bez porównania ze źródłem');
     return v;
   } catch (err: any) { toast(err.message, true); return null; }
   finally { naczBusy(false); }
