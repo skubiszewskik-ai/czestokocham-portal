@@ -13,7 +13,7 @@ export const SITE = {
   lang: 'pl',
   // kody weryfikacji: Google Search Console (google-site-verification) i Bing Webmaster Tools (msvalidate.01); puste = brak tagu
   // (IndexNow – klucz to plik public/<32 znaki hex>.txt, zgłoszenia wysyła scripts/publish.mjs)
-  verify: { google: '', bing: '' },
+  verify: { google: 'Fb6sonUQRDLNCAFxtcLdnHXGSvFEAOG2NDQZMMPJZQE', bing: '' },
 };
 
 // Wydawca portalu – stowarzyszenie zwykłe (dane z rejestru REGON; nazwiska uzupełnić po stronie stowarzyszenia)
