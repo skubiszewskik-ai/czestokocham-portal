@@ -7,7 +7,7 @@ import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { db, warsawNow, importSlot, IMPORT_HOURS } from '../lib/firestore.js';
 import { importLatest, importWczestochowie } from '../lib/importer.js';
 import { runRedaktor, seenKey } from '../lib/redaktor.js';
-import { runNaczelny, replanScheduled } from '../lib/naczelny.js';
+import { runNaczelny, releaseScheduled } from '../lib/naczelny.js';
 import { aiCandidate } from '../lib/images.js';
 import { importCgk } from '../lib/cgk.js';
 
@@ -76,11 +76,11 @@ if (args.has('--redaktor') || build.redaktorRequested) {
     .catch((e) => ({ checked: 0, drafts: [], skipped: [], duplicates: 0, errors: [e.message], pruned: [] }));
   log(`redaktor: nowych szkiców ${redaktorResult.drafts.length}, pominiętych ${redaktorResult.skipped.length}, powtórek ${redaktorResult.duplicates}, błędów ${redaktorResult.errors.length}`);
 
-  // 1c. redaktor naczelny AI – przegląd szkiców i publikacja rozłożona w ciągu dnia (wyłączany w panelu)
+  // 1c. redaktor naczelny AI – przegląd szkiców i publikacja od razu (wyłączany w panelu)
   if (cfg.autoPublish !== false) {
     log('redaktor naczelny…');
-    await replanScheduled(naczelnyStore(store), { perDay: Number(cfg.perDay) || 16, log }).catch((e) => log(`naczelny: przeplanowanie nieudane: ${e.message}`));
-    redaktorResult.naczelny = await runNaczelny(naczelnyStore(store), { perDay: Number(cfg.perDay) || 16, deadline: Date.now() + Number(process.env.NACZELNY_MINUTES || 12) * 60e3, log })
+    await releaseScheduled(naczelnyStore(store), { log }).catch((e) => log(`naczelny: wypuszczenie zaplanowanych nieudane: ${e.message}`));
+    redaktorResult.naczelny = await runNaczelny(naczelnyStore(store), { deadline: Date.now() + Number(process.env.NACZELNY_MINUTES || 12) * 60e3, log })
       .catch((e) => ({ checked: 0, published: [], held: [], rejected: [], newPhotos: 0, errors: [e.message] }));
     const n = redaktorResult.naczelny;
     log(`naczelny: sprawdzonych ${n.checked}, do publikacji ${n.published.length}, do człowieka ${n.held.length}, odrzuconych ${n.rejected.length}, nowych zdjęć ${n.newPhotos}, błędów ${n.errors.length}`);
@@ -88,8 +88,8 @@ if (args.has('--redaktor') || build.redaktorRequested) {
   await firestore.collection('redaktor_runs').add({ ...redaktorResult, trigger: build.redaktorRequested ? 'manual' : 'schedule', at: FieldValue.serverTimestamp() });
 } else if (args.has('--naczelny')) {
   // sam przegląd szkiców (ręcznie, np. po zmianie zasad)
-  await replanScheduled(naczelnyStore(redaktorStore()), { perDay: 16, log }).catch((e) => log(`naczelny: przeplanowanie nieudane: ${e.message}`));
-  const n = await runNaczelny(naczelnyStore(redaktorStore()), { perDay: 16, log });
+  await releaseScheduled(naczelnyStore(redaktorStore()), { log }).catch((e) => log(`naczelny: wypuszczenie zaplanowanych nieudane: ${e.message}`));
+  const n = await runNaczelny(naczelnyStore(redaktorStore()), { log });
   log(`naczelny: sprawdzonych ${n.checked}, do publikacji ${n.published.length}, do człowieka ${n.held.length}, odrzuconych ${n.rejected.length}, nowych zdjęć ${n.newPhotos}, błędów ${n.errors.length}`);
 }
 
@@ -154,11 +154,10 @@ function naczelnyStore(base) {
       .map((d) => ({ slug: d.id, ...d.data() })).filter((a) => !a.keep && !a.review),
     recent: async (since) => (await recentAll()).filter((a) => a.publishedAt.toMillis() >= +since)
       .sort((a, b) => b.publishedAt.toMillis() - a.publishedAt.toMillis()).map(({ slug, title }) => ({ slug, title })),
-    // zaplanowane na przyszłość teksty automatu sprzed priorytetów (bez review.priority) – do przeplanowania
-    scheduled: async () => (await col.where('publishedAt', '>', new Date(Date.now() + 10 * 60e3)).select('title', 'lead', 'status', 'autoPublished', 'review', 'basedOn', 'publishedAt').get()).docs
-      .filter((d) => d.get('status') === 'published' && d.get('autoPublished') && !d.get('review.priority'))
-      .map((d) => ({ slug: d.id, title: d.get('title'), lead: d.get('lead'), publishedAt: d.get('publishedAt').toDate(), sourceDate: d.get('basedOn.date')?.toDate?.()?.toISOString().slice(0, 10) })),
-    autoTimes: async () => (await recentAll()).filter((a) => a.autoPublished && a.publishedAt.toMillis() >= Date.now() - 864e5).map((a) => a.publishedAt.toDate()),
+    // teksty automatu zaplanowane przez starą kolejkę na później – do wypuszczenia od razu
+    scheduled: async () => (await col.where('publishedAt', '>', new Date()).select('title', 'status', 'autoPublished').get()).docs
+      .filter((d) => d.get('status') === 'published' && d.get('autoPublished'))
+      .map((d) => ({ slug: d.id, title: d.get('title') })),
     sourceText: async (url) => {
       if (!url) return '';
       const seen = await firestore.collection('redaktor_seen').doc(seenKey(url)).get();
@@ -171,7 +170,7 @@ function naczelnyStore(base) {
   };
 }
 
-// 1b'. kalendarz wydarzeń z cgk.czestochowa.pl (przy imporcie i przy każdym uruchomieniu redaktora, czyli co ~2 godziny)
+// 1b'. kalendarz wydarzeń z cgk.czestochowa.pl (przy imporcie i przy każdym uruchomieniu redaktora, czyli co ~godzinę)
 let cgkResult = null;
 if (importResult || redaktorResult || args.has('--wydarzenia')) {
   log('kalendarz wydarzeń z cgk.czestochowa.pl…');

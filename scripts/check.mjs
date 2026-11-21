@@ -8,8 +8,8 @@ const b = snap.data() || {};
 const now = warsawNow();
 const slot = importSlot(now);
 const importDue = (!!slot && b.lastImportSlot !== slot) || !!b.importRequested;
-// wirtualny redaktor co 2 godziny w ciągu dnia (7–21) albo na żądanie z panelu
-const redaktorDue = !!b.redaktorRequested || (now.hour >= 7 && now.hour <= 21 && Date.now() - (b.lastRedaktorAt?.toMillis() || 0) >= 2 * 3600e3);
+// wirtualny redaktor co godzinę w ciągu dnia (7–21) albo na żądanie z panelu
+const redaktorDue = !!b.redaktorRequested || (now.hour >= 7 && now.hour <= 21 && Date.now() - (b.lastRedaktorAt?.toMillis() || 0) >= 55 * 60e3);
 // artykuł zaplanowany przez redaktora naczelnego – jego pora minęła, czas go wpuścić na stronę
 const scheduledDue = !!b.nextScheduledAt && b.nextScheduledAt.toMillis() <= Date.now();
 const run = importDue ? 'import' : redaktorDue ? 'redaktor' : b.dirty || scheduledDue || !snap.exists ? 'build' : 'none';
